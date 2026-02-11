@@ -1,0 +1,76 @@
+# =============================================================================
+# Polymarket Trading Bot - Docker Compose
+# =============================================================================
+#
+# Strategy lifecycle: dry-run → verify scoreboard → live
+#
+# Usage:
+#   docker-compose up -d              # Start free strategies (scalper + latency)
+#   docker-compose up -d scalper      # Start only resolution scalper
+#   docker-compose up -d latency      # Start only crypto latency bot
+#   docker-compose --profile llm-strategies up -d  # Include LLM-powered trader
+#   docker-compose logs -f            # View logs
+#   docker-compose down               # Stop all services
+#
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # Resolution Scalping Bot (zero-fee GTC limit orders, no LLM)
+  scalper:
+    build: .
+    container_name: polybot-scalper
+    env_file: .env
+    command: ["agents.application.resolution_scalper", "--dry-run", "--scan-interval", "120"]
+    volumes:
+      - ./logs:/app/logs
+      - ./resolution_scalp_trades.log:/app/resolution_scalp_trades.log
+    restart: unless-stopped
+    networks:
+      - polymarket
+
+  # Crypto Latency Bot (Binance WebSocket + Polymarket, no LLM)
+  latency:
+    build: .
+    container_name: polybot-latency
+    env_file: .env
+    command: ["agents.application.crypto_latency_bot", "--dry-run", "--scan-interval", "30"]
+    volumes:
+      - ./logs:/app/logs
+      - ./crypto_latency_trades.log:/app/crypto_latency_trades.log
+    restart: unless-stopped
+    networks:
+      - polymarket
+
+  # Directional Trading Bot (LLM-powered — costs money, not started by default)
+  directional:
+    build: .
+    container_name: polybot-directional
+    env_file: .env
+    command: ["agents.application.arbitrage_trader", "--dry-run", "--scan-interval", "300"]
+    volumes:
+      - ./logs:/app/logs
+      - ./trades.log:/app/trades.log
+    restart: unless-stopped
+    profiles:
+      - llm-strategies
+    networks:
+      - polymarket
+
+  # One-time scanner (for testing)
+  scanner:
+    build: .
+    container_name: polybot-scanner
+    env_file: .env
+    command: ["agents.application.arbitrage_trader", "--dry-run", "--max-iterations", "1"]
+    volumes:
+      - ./logs:/app/logs
+    profiles:
+      - tools
+    networks:
+      - polymarket
+
+networks:
+  polymarket:
+    driver: bridge

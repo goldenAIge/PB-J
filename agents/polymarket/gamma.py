@@ -174,6 +174,99 @@ class GammaMarketClient:
             }
         )
 
+    def get_tradeable_markets(self, limit: int = 100, order_by: str = "volume24hr") -> "list[Market]":
+        """Fetch active, tradeable markets sorted by volume/liquidity."""
+        return self.get_markets(querystring_params={
+            "active": True,
+            "closed": False,
+            "archived": False,
+            "enableOrderBook": True,
+            "limit": limit,
+            "order": order_by,
+            "ascending": False,
+        })
+
+    def get_15min_crypto_markets(self, asset: str = "btc", num_windows: int = 8) -> list[dict]:
+        """
+        Fetch active 15-minute crypto up/down markets by constructing slugs.
+
+        These markets are 'restricted' on Polymarket and don't appear in normal
+        market listings. Instead we construct the event slug from the timestamp
+        pattern: {asset}-updown-15m-{unix_timestamp}
+
+        Args:
+            asset: Crypto asset ("btc", "eth", "sol")
+            num_windows: Number of 15-min windows ahead to check
+
+        Returns:
+            List of market dicts that are open and accepting orders
+        """
+        import time as _time
+        from datetime import datetime, timezone
+
+        asset_lower = asset.lower()
+        now = datetime.now(timezone.utc)
+        current_ts = int(now.timestamp())
+
+        # Round down to nearest 15-min boundary (900 seconds)
+        window_start = (current_ts // 900) * 900
+
+        filtered = []
+
+        # Check current window and several future windows
+        for offset in range(num_windows):
+            slug_ts = window_start + (offset * 900)
+            slug = f"{asset_lower}-updown-15m-{slug_ts}"
+
+            try:
+                response = httpx.get(
+                    self.gamma_events_endpoint,
+                    params={"slug": slug},
+                    timeout=10,
+                )
+                if response.status_code != 200:
+                    continue
+
+                events = response.json()
+                if not events:
+                    continue
+
+                event = events[0]
+                # Skip closed markets
+                if event.get("closed", False):
+                    continue
+
+                for market in event.get("markets", []):
+                    # Must be accepting orders
+                    if not market.get("acceptingOrders", False):
+                        continue
+                    # Must have token IDs
+                    clob_ids = market.get("clobTokenIds", "")
+                    if isinstance(clob_ids, str):
+                        try:
+                            clob_ids = json.loads(clob_ids)
+                        except Exception:
+                            continue
+                    if not clob_ids or len(clob_ids) < 2:
+                        continue
+                    # Must have valid endDate in the future
+                    end_str = market.get("endDate", "")
+                    if not end_str:
+                        continue
+                    try:
+                        end_date = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+                        if end_date <= now:
+                            continue
+                    except Exception:
+                        continue
+
+                    filtered.append(market)
+
+            except Exception:
+                continue
+
+        return filtered
+
     def get_market(self, market_id: int) -> dict():
         url = self.gamma_markets_endpoint + "/" + str(market_id)
         print(url)

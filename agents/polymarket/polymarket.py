@@ -5,13 +5,19 @@ import os
 import pdb
 import time
 import ast
+import json
+import logging
 import requests
 
 from dotenv import load_dotenv
 
 from web3 import Web3
 from web3.constants import MAX_INT
-from web3.middleware import geth_poa_middleware
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware
+except ImportError:
+    # For web3.py v6+, use the new middleware name
+    from web3.middleware import geth_poa_middleware as ExtraDataToPOAMiddleware
 
 import httpx
 from py_clob_client.client import ClobClient
@@ -53,11 +59,27 @@ class Polymarket:
         self.erc20_approve = """[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"owner","type":"address"},{"indexed":true,"internalType":"address","name":"spender","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Approval","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"authorizer","type":"address"},{"indexed":true,"internalType":"bytes32","name":"nonce","type":"bytes32"}],"name":"AuthorizationCanceled","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"authorizer","type":"address"},{"indexed":true,"internalType":"bytes32","name":"nonce","type":"bytes32"}],"name":"AuthorizationUsed","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"account","type":"address"}],"name":"Blacklisted","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"userAddress","type":"address"},{"indexed":false,"internalType":"address payable","name":"relayerAddress","type":"address"},{"indexed":false,"internalType":"bytes","name":"functionSignature","type":"bytes"}],"name":"MetaTransactionExecuted","type":"event"},{"anonymous":false,"inputs":[],"name":"Pause","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"newRescuer","type":"address"}],"name":"RescuerChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"role","type":"bytes32"},{"indexed":true,"internalType":"bytes32","name":"previousAdminRole","type":"bytes32"},{"indexed":true,"internalType":"bytes32","name":"newAdminRole","type":"bytes32"}],"name":"RoleAdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"role","type":"bytes32"},{"indexed":true,"internalType":"address","name":"account","type":"address"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"RoleGranted","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes32","name":"role","type":"bytes32"},{"indexed":true,"internalType":"address","name":"account","type":"address"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"RoleRevoked","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Transfer","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"account","type":"address"}],"name":"UnBlacklisted","type":"event"},{"anonymous":false,"inputs":[],"name":"Unpause","type":"event"},{"inputs":[],"name":"APPROVE_WITH_AUTHORIZATION_TYPEHASH","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"BLACKLISTER_ROLE","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"CANCEL_AUTHORIZATION_TYPEHASH","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"DECREASE_ALLOWANCE_WITH_AUTHORIZATION_TYPEHASH","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"DEFAULT_ADMIN_ROLE","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"DEPOSITOR_ROLE","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"DOMAIN_SEPARATOR","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"EIP712_VERSION","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"INCREASE_ALLOWANCE_WITH_AUTHORIZATION_TYPEHASH","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"META_TRANSACTION_TYPEHASH","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"PAUSER_ROLE","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"PERMIT_TYPEHASH","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"RESCUER_ROLE","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"TRANSFER_WITH_AUTHORIZATION_TYPEHASH","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"WITHDRAW_WITH_AUTHORIZATION_TYPEHASH","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"value","type":"uint256"},{"internalType":"uint256","name":"validAfter","type":"uint256"},{"internalType":"uint256","name":"validBefore","type":"uint256"},{"internalType":"bytes32","name":"nonce","type":"bytes32"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"approveWithAuthorization","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"authorizer","type":"address"},{"internalType":"bytes32","name":"nonce","type":"bytes32"}],"name":"authorizationState","outputs":[{"internalType":"enum GasAbstraction.AuthorizationState","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"blacklist","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"blacklisters","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"authorizer","type":"address"},{"internalType":"bytes32","name":"nonce","type":"bytes32"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"cancelAuthorization","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"subtractedValue","type":"uint256"}],"name":"decreaseAllowance","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"decrement","type":"uint256"},{"internalType":"uint256","name":"validAfter","type":"uint256"},{"internalType":"uint256","name":"validBefore","type":"uint256"},{"internalType":"bytes32","name":"nonce","type":"bytes32"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"decreaseAllowanceWithAuthorization","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"user","type":"address"},{"internalType":"bytes","name":"depositData","type":"bytes"}],"name":"deposit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"userAddress","type":"address"},{"internalType":"bytes","name":"functionSignature","type":"bytes"},{"internalType":"bytes32","name":"sigR","type":"bytes32"},{"internalType":"bytes32","name":"sigS","type":"bytes32"},{"internalType":"uint8","name":"sigV","type":"uint8"}],"name":"executeMetaTransaction","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"role","type":"bytes32"}],"name":"getRoleAdmin","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"role","type":"bytes32"},{"internalType":"uint256","name":"index","type":"uint256"}],"name":"getRoleMember","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"role","type":"bytes32"}],"name":"getRoleMemberCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"role","type":"bytes32"},{"internalType":"address","name":"account","type":"address"}],"name":"grantRole","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"role","type":"bytes32"},{"internalType":"address","name":"account","type":"address"}],"name":"hasRole","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"addedValue","type":"uint256"}],"name":"increaseAllowance","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"increment","type":"uint256"},{"internalType":"uint256","name":"validAfter","type":"uint256"},{"internalType":"uint256","name":"validBefore","type":"uint256"},{"internalType":"bytes32","name":"nonce","type":"bytes32"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"increaseAllowanceWithAuthorization","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"newName","type":"string"},{"internalType":"string","name":"newSymbol","type":"string"},{"internalType":"uint8","name":"newDecimals","type":"uint8"},{"internalType":"address","name":"childChainManager","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"initialized","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"isBlacklisted","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"name","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"}],"name":"nonces","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"pause","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"paused","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"pausers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"value","type":"uint256"},{"internalType":"uint256","name":"deadline","type":"uint256"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"permit","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"role","type":"bytes32"},{"internalType":"address","name":"account","type":"address"}],"name":"renounceRole","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"contract IERC20","name":"tokenContract","type":"address"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"rescueERC20","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"rescuers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes32","name":"role","type":"bytes32"},{"internalType":"address","name":"account","type":"address"}],"name":"revokeRole","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"symbol","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"recipient","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transfer","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"recipient","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transferFrom","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"from","type":"address"},{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"value","type":"uint256"},{"internalType":"uint256","name":"validAfter","type":"uint256"},{"internalType":"uint256","name":"validBefore","type":"uint256"},{"internalType":"bytes32","name":"nonce","type":"bytes32"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"transferWithAuthorization","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"unBlacklist","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"unpause","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"newName","type":"string"},{"internalType":"string","name":"newSymbol","type":"string"}],"name":"updateMetadata","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"uint256","name":"value","type":"uint256"},{"internalType":"uint256","name":"validAfter","type":"uint256"},{"internalType":"uint256","name":"validBefore","type":"uint256"},{"internalType":"bytes32","name":"nonce","type":"bytes32"},{"internalType":"uint8","name":"v","type":"uint8"},{"internalType":"bytes32","name":"r","type":"bytes32"},{"internalType":"bytes32","name":"s","type":"bytes32"}],"name":"withdrawWithAuthorization","outputs":[],"stateMutability":"nonpayable","type":"function"}]"""
         self.erc1155_set_approval = """[{"inputs": [{ "internalType": "address", "name": "operator", "type": "address" },{ "internalType": "bool", "name": "approved", "type": "bool" }],"name": "setApprovalForAll","outputs": [],"stateMutability": "nonpayable","type": "function"}]"""
 
-        self.usdc_address = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+        # CTF redeemPositions ABI - for claiming resolved positions
+        self.ctf_redeem_abi = """[
+            {"inputs": [{ "internalType": "address", "name": "operator", "type": "address" },{ "internalType": "bool", "name": "approved", "type": "bool" }],"name": "setApprovalForAll","outputs": [],"stateMutability": "nonpayable","type": "function"},
+            {"inputs":[{"internalType":"contract IERC20","name":"collateralToken","type":"address"},{"internalType":"bytes32","name":"parentCollectionId","type":"bytes32"},{"internalType":"bytes32","name":"conditionId","type":"bytes32"},{"internalType":"uint256[]","name":"indexSets","type":"uint256[]"}],"name":"redeemPositions","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"bytes32","name":"conditionId","type":"bytes32"}],"name":"payoutDenominator","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"bytes32","name":"conditionId","type":"bytes32"},{"internalType":"uint256","name":"index","type":"uint256"}],"name":"payoutNumerators","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"account","type":"address"},{"internalType":"uint256","name":"id","type":"uint256"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+        ]"""
+
+        # Neg Risk Adapter address
+        self.neg_risk_adapter_address = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"
+        # Neg Risk Adapter ABI for redemption
+        self.neg_risk_redeem_abi = """[
+            {"inputs":[{"internalType":"bytes32","name":"conditionId","type":"bytes32"},{"internalType":"uint256[]","name":"amounts","type":"uint256[]"}],"name":"redeemPositions","outputs":[],"stateMutability":"nonpayable","type":"function"}
+        ]"""
+
+        self.usdc_address = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # USDC.e (Bridged) on Polygon - used by Polymarket
         self.ctf_address = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
 
         self.web3 = Web3(Web3.HTTPProvider(self.polygon_rpc))
-        self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        self.web3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
         self.usdc = self.web3.eth.contract(
             address=self.usdc_address, abi=self.erc20_approve
@@ -65,9 +87,22 @@ class Polymarket:
         self.ctf = self.web3.eth.contract(
             address=self.ctf_address, abi=self.erc1155_set_approval
         )
+        # CTF contract with redeem functions
+        self.ctf_redeem = self.web3.eth.contract(
+            address=self.ctf_address, abi=self.ctf_redeem_abi
+        )
+        # Neg Risk Adapter contract for neg-risk market redemptions
+        self.neg_risk_adapter = self.web3.eth.contract(
+            address=self.neg_risk_adapter_address, abi=self.neg_risk_redeem_abi
+        )
 
-        self._init_api_keys()
-        self._init_approvals(False)
+        # Only initialize API keys if private key is provided
+        if self.private_key:
+            self._init_api_keys()
+            self._init_approvals(False)
+        else:
+            self.client = None
+            self.credentials = None
 
     def _init_api_keys(self) -> None:
         self.client = ClobClient(
@@ -351,11 +386,263 @@ class Polymarket:
         print("Done!")
         return resp
 
+    def execute_limit_buy(self, token_id: str, price: float, size: float) -> dict:
+        """
+        Execute a GTC limit buy order (maker order = zero fees).
+
+        Args:
+            token_id: The token ID to buy
+            price: Limit price (e.g., 0.55)
+            size: Number of shares to buy
+
+        Returns:
+            Order response dict with 'orderID' on success
+        """
+        order_args = OrderArgs(
+            price=price,
+            size=size,
+            side=BUY,
+            token_id=token_id,
+        )
+        signed_order = self.client.create_order(order_args)
+        resp = self.client.post_order(signed_order, orderType=OrderType.GTC)
+        return resp
+
+    def cancel_order(self, order_id: str) -> dict:
+        """Cancel an open order by order ID."""
+        return self.client.cancel(order_id)
+
+    def get_order(self, order_id: str) -> dict:
+        """Get order status by order ID."""
+        return self.client.get_order(order_id)
+
+    def execute_market_buy(self, token_id: str, amount: float) -> str:
+        """
+        Execute a market buy order for a specific token.
+
+        Args:
+            token_id: The token ID to buy
+            amount: Amount in USDC to spend
+
+        Returns:
+            Order response from the API
+        """
+        order_args = MarketOrderArgs(
+            token_id=token_id,
+            amount=amount,
+            side=BUY,  # Always buying for resolution scalping
+        )
+        signed_order = self.client.create_market_order(order_args)
+        # FOK = Fill-or-Kill, ensures immediate execution or cancellation
+        resp = self.client.post_order(signed_order, orderType=OrderType.FOK)
+        return resp
+
     def get_usdc_balance(self) -> float:
         balance_res = self.usdc.functions.balanceOf(
             self.get_address_for_private_key()
         ).call()
         return float(balance_res / 10e5)
+
+    def get_redeemable_positions(self) -> list[dict]:
+        """Fetch positions flagged as redeemable from the data API."""
+        logger = logging.getLogger(__name__)
+        wallet = self.get_address_for_private_key()
+        try:
+            response = httpx.get(
+                f"https://data-api.polymarket.com/positions?user={wallet}",
+                timeout=15,
+            )
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch positions: HTTP {response.status_code}")
+                return []
+            positions = response.json()
+            redeemable = [p for p in positions if p.get("redeemable", False)]
+            return redeemable
+        except Exception as e:
+            logger.error(f"Error fetching redeemable positions: {e}")
+            return []
+
+    def redeem_positions(self) -> list[dict]:
+        """
+        Redeem all resolved positions to reclaim USDC.
+
+        For standard markets: calls CTF.redeemPositions(collateralToken, parentCollectionId, conditionId, indexSets)
+        For neg-risk markets: calls NegRiskAdapter.redeemPositions(conditionId, amounts)
+
+        Returns list of redemption results.
+        """
+        logger = logging.getLogger(__name__)
+        redeemable = self.get_redeemable_positions()
+
+        if not redeemable:
+            logger.info("No redeemable positions found")
+            return []
+
+        logger.info(f"Found {len(redeemable)} redeemable positions")
+        results = []
+        wallet = self.get_address_for_private_key()
+
+        for i, pos in enumerate(redeemable):
+            title = pos.get("title", "Unknown")
+            condition_id = pos.get("conditionId", "")
+            size = float(pos.get("size", 0))
+            neg_risk = pos.get("negativeRisk", False) or pos.get("negRisk", False)
+
+            if not condition_id:
+                logger.warning(f"Skipping {title}: no conditionId")
+                continue
+
+            # Wait between transactions to avoid RPC rate limits
+            if i > 0:
+                logger.info("Waiting 15s before next redemption (RPC rate limit)...")
+                time.sleep(15)
+
+            outcome_index = pos.get("outcomeIndex", 0)
+            logger.info(f"Redeeming: {title} ({size:.4f} shares, neg_risk={neg_risk}, outcome={outcome_index})")
+
+            try:
+                if neg_risk:
+                    result = self._redeem_neg_risk(condition_id, size, wallet, outcome_index)
+                else:
+                    result = self._redeem_standard(condition_id, wallet)
+                results.append({"title": title, "size": size, "success": True, "tx": result})
+                logger.info(f"  Redeemed successfully! TX: {result}")
+            except Exception as e:
+                results.append({"title": title, "size": size, "success": False, "error": str(e)})
+                logger.error(f"  Failed to redeem {title}: {e}")
+
+        return results
+
+    def _rpc_call_with_retry(self, fn, max_retries=3, base_delay=12):
+        """Execute an RPC call with retry on rate limiting."""
+        logger = logging.getLogger(__name__)
+        for attempt in range(max_retries):
+            try:
+                return fn()
+            except Exception as e:
+                if "rate limit" in str(e).lower() or "-32090" in str(e):
+                    delay = base_delay * (attempt + 1)
+                    logger.info(f"  RPC rate limited, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                else:
+                    raise
+        # Final attempt without catching
+        return fn()
+
+    def _redeem_standard(self, condition_id: str, wallet: str) -> str:
+        """Redeem a standard (non-neg-risk) CTF position."""
+        # For binary markets: indexSets = [1, 2] (outcome 0 = 1, outcome 1 = 2)
+        # parentCollectionId is bytes32(0) for top-level conditions
+        parent_collection_id = bytes(32)  # 0x00...00
+        index_sets = [1, 2]  # Both outcomes for binary market
+        condition_bytes = bytes.fromhex(condition_id[2:]) if condition_id.startswith("0x") else bytes.fromhex(condition_id)
+
+        nonce = self._rpc_call_with_retry(
+            lambda: self.web3.eth.get_transaction_count(wallet)
+        )
+        gas_price = self._rpc_call_with_retry(
+            lambda: self.web3.eth.gas_price
+        )
+
+        tx = self.ctf_redeem.functions.redeemPositions(
+            self.usdc_address,
+            parent_collection_id,
+            condition_bytes,
+            index_sets,
+        ).build_transaction({
+            "chainId": self.chain_id,
+            "from": wallet,
+            "nonce": nonce,
+            "gas": 300000,
+            "gasPrice": gas_price,
+        })
+
+        signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=self.private_key)
+        tx_hash = self._rpc_call_with_retry(
+            lambda: self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        )
+        receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+        if receipt["status"] != 1:
+            raise Exception(f"Transaction reverted: {tx_hash.hex()}")
+
+        return tx_hash.hex()
+
+    def _ensure_neg_risk_approval(self, wallet: str) -> None:
+        """Ensure the NegRiskAdapter is approved to transfer CTF tokens."""
+        logger = logging.getLogger(__name__)
+        check_abi = [{"inputs":[{"internalType":"address","name":"account","type":"address"},{"internalType":"address","name":"operator","type":"address"}],"name":"isApprovedForAll","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}]
+        ctf_check = self.web3.eth.contract(address=self.ctf_address, abi=check_abi)
+        is_approved = self._rpc_call_with_retry(
+            lambda: ctf_check.functions.isApprovedForAll(wallet, self.neg_risk_adapter_address).call()
+        )
+
+        if is_approved:
+            return
+
+        logger.info("  Approving NegRiskAdapter for CTF transfers...")
+        nonce = self._rpc_call_with_retry(lambda: self.web3.eth.get_transaction_count(wallet))
+        time.sleep(3)
+        gas_price = self._rpc_call_with_retry(lambda: self.web3.eth.gas_price)
+
+        tx = self.ctf.functions.setApprovalForAll(
+            self.neg_risk_adapter_address, True
+        ).build_transaction({
+            "chainId": self.chain_id, "from": wallet,
+            "nonce": nonce, "gas": 100000, "gasPrice": gas_price,
+        })
+        signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=self.private_key)
+        time.sleep(3)
+        tx_hash = self._rpc_call_with_retry(
+            lambda: self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        )
+        receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+        if receipt["status"] != 1:
+            raise Exception("Failed to approve NegRiskAdapter")
+        logger.info(f"  NegRiskAdapter approved: {tx_hash.hex()}")
+        time.sleep(5)
+
+    def _redeem_neg_risk(self, condition_id: str, size: float, wallet: str, outcome_index: int = 1) -> str:
+        """Redeem a neg-risk position through the NegRiskAdapter."""
+        logger = logging.getLogger(__name__)
+
+        # Ensure NegRiskAdapter has approval to move our CTF tokens
+        self._ensure_neg_risk_approval(wallet)
+
+        amount_wei = int(size * 1e6)  # USDC has 6 decimals, CTF tokens match
+        # amounts array: one entry per outcome, amount for the side we hold
+        amounts = [0, 0]
+        amounts[outcome_index] = amount_wei
+        condition_bytes = bytes.fromhex(condition_id[2:]) if condition_id.startswith("0x") else bytes.fromhex(condition_id)
+
+        nonce = self._rpc_call_with_retry(
+            lambda: self.web3.eth.get_transaction_count(wallet)
+        )
+        gas_price = self._rpc_call_with_retry(
+            lambda: self.web3.eth.gas_price
+        )
+
+        tx = self.neg_risk_adapter.functions.redeemPositions(
+            condition_bytes,
+            amounts,
+        ).build_transaction({
+            "chainId": self.chain_id,
+            "from": wallet,
+            "nonce": nonce,
+            "gas": 500000,
+            "gasPrice": gas_price,
+        })
+
+        signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=self.private_key)
+        tx_hash = self._rpc_call_with_retry(
+            lambda: self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        )
+        receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+        if receipt["status"] != 1:
+            raise Exception(f"Transaction reverted: {tx_hash.hex()}")
+
+        return tx_hash.hex()
 
 
 def test():
