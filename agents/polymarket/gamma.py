@@ -186,20 +186,22 @@ class GammaMarketClient:
             "ascending": False,
         })
 
-    def get_15min_crypto_markets(self, asset: str = "btc", num_windows: int = 8) -> list[dict]:
+    def get_crypto_markets(self, asset: str = "btc", window_minutes: int = 15, num_windows: int = 8) -> list[dict]:
         """
-        Fetch active 15-minute crypto up/down markets by constructing slugs.
+        Fetch active crypto up/down markets by constructing slugs.
 
         These markets are 'restricted' on Polymarket and don't appear in normal
         market listings. Instead we construct the event slug from the timestamp
-        pattern: {asset}-updown-15m-{unix_timestamp}
+        pattern: {asset}-updown-{window_minutes}m-{unix_timestamp}
 
         Args:
             asset: Crypto asset ("btc", "eth", "sol")
-            num_windows: Number of 15-min windows ahead to check
+            window_minutes: Candle duration in minutes (5 or 15)
+            num_windows: Number of windows ahead to check
 
         Returns:
-            List of market dicts that are open and accepting orders
+            List of market dicts that are open and accepting orders,
+            each tagged with _window_minutes for downstream use.
         """
         import time as _time
         from datetime import datetime, timezone
@@ -208,15 +210,16 @@ class GammaMarketClient:
         now = datetime.now(timezone.utc)
         current_ts = int(now.timestamp())
 
-        # Round down to nearest 15-min boundary (900 seconds)
-        window_start = (current_ts // 900) * 900
+        window_seconds = window_minutes * 60
+        # Round down to nearest window boundary
+        window_start = (current_ts // window_seconds) * window_seconds
 
         filtered = []
 
         # Check current window and several future windows
         for offset in range(num_windows):
-            slug_ts = window_start + (offset * 900)
-            slug = f"{asset_lower}-updown-15m-{slug_ts}"
+            slug_ts = window_start + (offset * window_seconds)
+            slug = f"{asset_lower}-updown-{window_minutes}m-{slug_ts}"
 
             try:
                 response = httpx.get(
@@ -260,12 +263,18 @@ class GammaMarketClient:
                     except Exception:
                         continue
 
+                    # Tag with window_minutes for downstream use
+                    market["_window_minutes"] = window_minutes
                     filtered.append(market)
 
             except Exception:
                 continue
 
         return filtered
+
+    def get_15min_crypto_markets(self, asset: str = "btc", num_windows: int = 8) -> list[dict]:
+        """Backward-compatible wrapper for get_crypto_markets with 15-min windows."""
+        return self.get_crypto_markets(asset=asset, window_minutes=15, num_windows=num_windows)
 
     def get_market(self, market_id: int) -> dict():
         url = self.gamma_markets_endpoint + "/" + str(market_id)

@@ -317,12 +317,13 @@ def run_crypto_latency(
     min_move: float = 0.15,
     max_entry: float = 0.65,
     asset: str = "btc",
+    windows: str = "15",
 ) -> None:
     """
     Run the crypto latency trading bot.
 
     Exploits price feed latency between Binance and Polymarket's
-    15-minute BTC up/down markets. Uses GTC limit orders (zero fees).
+    crypto up/down markets. Uses GTC limit orders (zero fees).
 
     --dry-run: Simulate trades without executing (default: True)
     --scan-interval: Seconds between market scans (default: 30)
@@ -331,13 +332,16 @@ def run_crypto_latency(
     --min-move: Min BTC move % to trigger trade (default: 0.15)
     --max-entry: Max Polymarket entry price (default: 0.65)
     --asset: Crypto asset to trade (btc, eth, sol)
+    --windows: Market timeframes in minutes, comma-separated (default: "15", e.g., "5,15")
     """
     import asyncio
 
+    market_windows = [int(w.strip()) for w in windows.split(",")]
     config = CryptoLatencyConfig(
         min_price_move_pct=min_move,
         max_entry_price=max_entry,
         asset=asset,
+        market_windows=market_windows,
     )
     risk_config = RiskConfig()
 

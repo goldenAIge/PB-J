@@ -8,6 +8,7 @@ import ast
 import json
 import logging
 import requests
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -335,6 +336,16 @@ class Polymarket:
 
     def get_orderbook_price(self, token_id: str) -> float:
         return float(self.client.get_price(token_id))
+
+    def get_best_ask(self, token_id: str) -> Optional[float]:
+        """Get the best (lowest) ask price from the CLOB order book."""
+        try:
+            book = self.client.get_order_book(token_id)
+            if book.asks:
+                return min(float(a.price) for a in book.asks)
+        except Exception:
+            pass
+        return None
 
     def get_address_for_private_key(self):
         account = self.w3.eth.account.from_key(str(self.private_key))

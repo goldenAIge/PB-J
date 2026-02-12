@@ -59,11 +59,12 @@ class CryptoLatencyConfig(BaseModel):
     max_minutes_remaining: float = Field(default=14.0, description="Don't trade >14 min (too early, uncertain)")
     trade_percent: float = Field(default=0.15, description="15% of cash per trade")
     min_trade_size: float = Field(default=1.0, description="Min trade size in USDC")
-    max_trade_size: float = Field(default=25.0, description="Max trade size in USDC")
+    max_trade_size: float = Field(default=10.0, description="Max trade size in USDC")
     max_concurrent_positions: int = Field(default=5, description="Max open positions at once")
     scan_interval: float = Field(default=30, description="Seconds between market scans")
-    order_timeout: float = Field(default=10, description="Cancel unfilled limit orders after N seconds")
+    order_timeout: float = Field(default=30, description="Cancel unfilled limit orders after N seconds")
     asset: str = Field(default="btc", description="Crypto asset to trade (btc, eth, sol)")
+    market_windows: list[int] = Field(default=[15], description="Market timeframes in minutes [5, 15]")
 
 
 class PricePoint(NamedTuple):
@@ -85,6 +86,7 @@ class TradeSignal:
     move_pct: float
     minutes_remaining: float
     end_date: str
+    window_minutes: int = 15
 
 
 @dataclass
@@ -309,36 +311,40 @@ class CryptoLatencyBot:
         return self.risk_manager.get_balance()
 
     def find_active_markets(self) -> list[dict]:
-        """Find active 15-min crypto markets via Gamma API."""
-        try:
-            markets = self.gamma.get_15min_crypto_markets(
-                asset=self.config.asset,
-            )
-            return markets
-        except Exception as e:
-            logger.error(f"Failed to fetch 15-min markets: {e}")
-            return []
+        """Find active crypto markets across all configured timeframes."""
+        all_markets = []
+        for window in self.config.market_windows:
+            try:
+                markets = self.gamma.get_crypto_markets(
+                    asset=self.config.asset,
+                    window_minutes=window,
+                )
+                all_markets.extend(markets)
+            except Exception as e:
+                logger.error(f"Failed to fetch {window}-min markets: {e}")
+        return all_markets
 
     def get_candle_open_price(self, market: dict) -> Optional[float]:
         """
-        Derive the BTC price at the start of a 15-min market candle.
+        Derive the BTC price at the start of a market candle.
 
-        The market endDate minus 15 minutes = candle start time.
+        The market endDate minus window_minutes = candle start time.
         Look up BTC price at that timestamp from our stored history.
         """
         end_date_str = market.get("endDate", "")
         if not end_date_str:
             return None
 
+        window_minutes = market.get("_window_minutes", 15)
         try:
             end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
-            start_time = end_date - timedelta(minutes=15)
+            start_time = end_date - timedelta(minutes=window_minutes)
             start_ts = start_time.timestamp()
             return self.price_feed.get_price_at(start_ts)
         except Exception:
             return None
 
-    def _get_required_move_pct(self, minutes_remaining: float) -> float:
+    def _get_required_move_pct(self, minutes_remaining: float, window_minutes: int = 15) -> float:
         """
         Time-scaled entry threshold: require bigger moves early in candle.
 
@@ -346,20 +352,37 @@ class CryptoLatencyBot:
         so we need stronger conviction. Near the close, a smaller move is
         already nearly locked in.
 
-        Scale:
+        15-min scale:
             12+ min left → 0.40% move required
              8  min left → 0.30%
              5  min left → 0.20%
              2  min left → 0.15% (config minimum)
+
+        5-min scale (proportionally scaled):
+             4+ min left → 0.40%
+           2.5  min left → 0.25%
+           1.5  min left → 0.15%
+             0  min left → 0.10%
         """
-        if minutes_remaining >= 12:
-            return 0.40
-        elif minutes_remaining >= 8:
-            return 0.30
-        elif minutes_remaining >= 5:
-            return 0.20
+        if window_minutes <= 5:
+            if minutes_remaining >= 4:
+                return 0.40
+            elif minutes_remaining >= 2.5:
+                return 0.25
+            elif minutes_remaining >= 1.5:
+                return 0.15
+            else:
+                return 0.10
         else:
-            return self.config.min_price_move_pct  # 0.15
+            # 15-min (default)
+            if minutes_remaining >= 12:
+                return 0.40
+            elif minutes_remaining >= 8:
+                return 0.30
+            elif minutes_remaining >= 5:
+                return 0.20
+            else:
+                return self.config.min_price_move_pct  # 0.15
 
     def _check_trend_filter(self, winning_side: str) -> bool:
         """
@@ -406,33 +429,33 @@ class CryptoLatencyBot:
 
     def _check_orderbook_price(self, token_id: str) -> Optional[float]:
         """
-        Check the real CLOB order book price for a token.
+        Check the real CLOB best ask price for a token.
 
         The Gamma API `outcomePrices` can be stale. The CLOB order book
         shows the actual current ask price. If the winning side is
         already expensive on the book, the edge is gone.
 
-        Returns the real price, or None if the check fails.
+        Returns the best ask price, or None if the check fails.
         """
         try:
-            real_price = self.polymarket.get_orderbook_price(token_id)
-            return float(real_price)
+            return self.polymarket.get_best_ask(token_id)
         except Exception as e:
-            logger.debug(f"Order book price check failed for {token_id}: {e}")
+            logger.debug(f"Order book price check failed: {e}")
             return None
 
     def evaluate_opportunity(self, market: dict) -> Optional[TradeSignal]:
         """
-        Evaluate a 15-min market for a latency trading opportunity.
+        Evaluate a market for a latency trading opportunity.
 
         Checks:
-        1. Minutes remaining in valid window (2-14 min)
+        1. Minutes remaining in valid window
         2. BTC has moved enough from candle open (time-scaled threshold)
         3. Trend filter: only trade WITH the 10-min BTC trend
         4. Polymarket price for winning side is < max_entry_price
         5. Order book price verification (real price, not stale API)
         """
         market_id = str(market.get("id", ""))
+        window_minutes = market.get("_window_minutes", 15)
 
         # Skip if already traded
         if market_id in self.traded_markets:
@@ -475,7 +498,7 @@ class CryptoLatencyBot:
         move_pct = ((btc_now - btc_open) / btc_open) * 100.0
 
         # TIME-SCALED THRESHOLD: require bigger moves early in candle
-        required_move = self._get_required_move_pct(minutes_remaining)
+        required_move = self._get_required_move_pct(minutes_remaining, window_minutes)
         if abs(move_pct) < required_move:
             return None
 
@@ -553,6 +576,7 @@ class CryptoLatencyBot:
             move_pct=move_pct,
             minutes_remaining=minutes_remaining,
             end_date=end_date_str,
+            window_minutes=window_minutes,
         )
 
     async def execute_trade(self, signal: TradeSignal) -> Optional[LatencyTrade]:
@@ -575,8 +599,13 @@ class CryptoLatencyBot:
             logger.info(f"At max positions ({self.position_count}/{self.config.max_concurrent_positions})")
             return None
 
+        # Re-fetch best ask right before ordering for freshest price
+        best_ask = self.polymarket.get_best_ask(signal.token_id)
+        order_price = best_ask if best_ask and best_ask <= self.config.max_entry_price else signal.suggested_price
+        logger.info(f"Order pricing: best_ask=${best_ask}, suggested=${signal.suggested_price:.4f}, using=${order_price:.4f}")
+
         # Calculate shares and expected profit
-        shares = trade_size / signal.suggested_price
+        shares = trade_size / order_price
         expected_payout = shares  # Each share pays $1.00 at resolution
         expected_profit = expected_payout - trade_size  # No fees for maker orders!
 
@@ -586,7 +615,7 @@ class CryptoLatencyBot:
             question=signal.question,
             side=signal.side,
             amount=trade_size,
-            entry_price=signal.suggested_price,
+            entry_price=order_price,
             expected_payout=expected_payout,
             expected_profit=expected_profit,
             btc_price=signal.btc_price,
@@ -599,7 +628,7 @@ class CryptoLatencyBot:
         logger.info(f"\n{'='*60}")
         logger.info("CRYPTO LATENCY TRADE SIGNAL")
         logger.info(f"Market: {signal.question[:60]}")
-        logger.info(f"Side: {signal.side} @ ${signal.suggested_price:.4f}")
+        logger.info(f"Side: {signal.side} @ ${order_price:.4f}")
         logger.info(f"BTC: ${signal.btc_price:,.2f} (open: ${signal.btc_open_price:,.2f}, move: {signal.move_pct:+.3f}%)")
         logger.info(f"Time remaining: {signal.minutes_remaining:.1f} min")
         logger.info(f"Trade: ${trade_size:.2f} -> {shares:.1f} shares -> ${expected_payout:.2f} payout")
@@ -613,8 +642,8 @@ class CryptoLatencyBot:
             # Derive event slug for resolution checking
             try:
                 end_dt = datetime.fromisoformat(signal.end_date.replace("Z", "+00:00"))
-                start_ts = int((end_dt - timedelta(minutes=15)).timestamp())
-                trade.event_slug = f"{self.config.asset.lower()}-updown-15m-{start_ts}"
+                start_ts = int((end_dt - timedelta(minutes=signal.window_minutes)).timestamp())
+                trade.event_slug = f"{self.config.asset.lower()}-updown-{signal.window_minutes}m-{start_ts}"
             except Exception:
                 trade.event_slug = None
             self.successful_trades += 1
@@ -626,10 +655,10 @@ class CryptoLatencyBot:
             try:
                 logger.warning(">>> PLACING LIVE LIMIT ORDER <<<")
 
-                # Place GTC limit order (maker = zero fees)
+                # Place GTC limit order at best ask for immediate fill
                 order_response = self.polymarket.execute_limit_buy(
                     token_id=signal.token_id,
-                    price=signal.suggested_price,
+                    price=order_price,
                     size=round(shares, 2),
                 )
 
@@ -647,10 +676,19 @@ class CryptoLatencyBot:
 
                 if filled:
                     trade.status = "FILLED"
+                    trade.end_date = signal.end_date
+                    # Derive event slug for resolution checking
+                    try:
+                        end_dt = datetime.fromisoformat(signal.end_date.replace("Z", "+00:00"))
+                        start_ts = int((end_dt - timedelta(minutes=signal.window_minutes)).timestamp())
+                        trade.event_slug = f"{self.config.asset.lower()}-updown-{signal.window_minutes}m-{start_ts}"
+                    except Exception:
+                        trade.event_slug = None
                     self.successful_trades += 1
                     self.position_count += 1
                     self.traded_markets.add(signal.market_id)
-                    logger.info(f"Order FILLED! Holding to resolution.")
+                    self.pending_resolutions.append(trade)
+                    logger.info(f"Order FILLED! Queued for resolution verification.")
                 else:
                     # Cancel unfilled order
                     if order_id:
@@ -678,9 +716,10 @@ class CryptoLatencyBot:
                 self.telegram.send_message_sync(
                     f"{'[DRY] ' if self.dry_run else ''}<b>LATENCY {trade.status}</b>\n\n"
                     f"{signal.question[:50]}\n"
-                    f"BUY {signal.side} @ ${signal.suggested_price:.4f}\n"
+                    f"BUY {signal.side} @ ${order_price:.4f}\n"
                     f"BTC: ${signal.btc_price:,.2f} ({signal.move_pct:+.3f}%)\n"
-                    f"Amount: ${trade_size:.2f} | Profit: ${expected_profit:.2f}\n"
+                    f"Cost: ${trade_size:.2f} | Shares: {shares:.1f}\n"
+                    f"Payout if win: ${expected_payout:.2f} (+${expected_profit:.2f})\n"
                     f"Time left: {signal.minutes_remaining:.1f} min\n"
                 )
             except Exception as e:
@@ -797,15 +836,16 @@ class CryptoLatencyBot:
             # Telegram notification for resolution
             total_resolved = self.verified_wins + self.verified_losses
             win_rate = self.verified_wins / total_resolved * 100 if total_resolved > 0 else 0
+            current_balance = self.get_balance()
             try:
-                emoji = "+" if won else "-"
                 self.telegram.send_message_sync(
                     f"{'[DRY] ' if self.dry_run else ''}<b>RESOLUTION {'WIN' if won else 'LOSS'}</b>\n\n"
                     f"{trade.question[:50]}\n"
                     f"Bet: {trade.side} | Result: {resolved_side}\n"
-                    f"P&L: ${trade.actual_profit:+.2f}\n\n"
-                    f"Score: {self.verified_wins}W/{self.verified_losses}L ({win_rate:.0f}%)\n"
-                    f"Verified P&L: ${self.verified_pnl:+.2f}\n"
+                    f"This trade: ${trade.actual_profit:+.2f}\n\n"
+                    f"Record: {self.verified_wins}W/{self.verified_losses}L ({win_rate:.0f}%)\n"
+                    f"Session P&L: ${self.verified_pnl:+.2f}\n"
+                    f"Balance: ${current_balance:.2f}\n"
                 )
             except Exception:
                 pass
@@ -901,7 +941,8 @@ class CryptoLatencyBot:
 
         logger.info(f"\n{'='*60}")
         logger.info("STARTING CRYPTO LATENCY BOT")
-        logger.info(f"Asset: {self.config.asset.upper()}")
+        windows_str = "/".join(f"{w}m" for w in self.config.market_windows)
+        logger.info(f"Asset: {self.config.asset.upper()} | Windows: {windows_str}")
         logger.info(f"Scan interval: {interval}s")
         logger.info(f"Mode: {'DRY RUN' if self.dry_run else 'LIVE TRADING'}")
         logger.info(f"Entry threshold: BTC move > {self.config.min_price_move_pct}%, Polymarket < ${self.config.max_entry_price}")
@@ -959,14 +1000,16 @@ class CryptoLatencyBot:
                 if btc_data:
                     logger.info(f"BTC: ${btc_data[0]:,.2f}")
 
-                # Find active 15-min markets
+                # Find active markets across all configured timeframes
                 markets = self.find_active_markets()
-                logger.info(f"Found {len(markets)} active 15-min {self.config.asset.upper()} markets")
+                windows_str = "/".join(f"{w}m" for w in self.config.market_windows)
+                logger.info(f"Found {len(markets)} active {windows_str} {self.config.asset.upper()} markets")
 
                 # Evaluate each market
                 signals = []
                 for market in markets:
                     q = market.get("question", "")[:50]
+                    wm = market.get("_window_minutes", 15)
                     end_str = market.get("endDate", "")
                     try:
                         end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
@@ -976,8 +1019,8 @@ class CryptoLatencyBot:
                     btc_open = self.get_candle_open_price(market)
                     if btc_data and btc_open:
                         mv = ((btc_data[0] - btc_open) / btc_open) * 100
-                        req = self._get_required_move_pct(mins_left)
-                        logger.info(f"  {q} | {mins_left:.1f}min | move {mv:+.3f}% (need {req:.2f}%)")
+                        req = self._get_required_move_pct(mins_left, wm)
+                        logger.info(f"  [{wm}m] {q} | {mins_left:.1f}min | move {mv:+.3f}% (need {req:.2f}%)")
                     signal = self.evaluate_opportunity(market)
                     if signal:
                         signals.append(signal)
@@ -1045,6 +1088,8 @@ def main():
                         help='Max Polymarket entry price (default: 0.65)')
     parser.add_argument('--asset', type=str, default='btc',
                         help='Crypto asset to trade (btc, eth, sol)')
+    parser.add_argument('--windows', type=str, default=None,
+                        help='Market timeframes in minutes, comma-separated (e.g., "5,15")')
 
     args = parser.parse_args()
 
@@ -1055,6 +1100,8 @@ def main():
         config_kwargs['max_entry_price'] = args.max_entry
     if args.asset:
         config_kwargs['asset'] = args.asset
+    if args.windows:
+        config_kwargs['market_windows'] = [int(w.strip()) for w in args.windows.split(',')]
 
     config = CryptoLatencyConfig(**config_kwargs)
     risk_config = RiskConfig()
