@@ -714,7 +714,7 @@ class CryptoLatencyBot:
         if trade.status in ("FILLED", "DRY_RUN"):
             try:
                 self.telegram.send_message_sync(
-                    f"{'[DRY] ' if self.dry_run else ''}<b>LATENCY {trade.status}</b>\n\n"
+                    f"{'[DRY] ' if self.dry_run else ''}<b>LATENCY {trade.status} [{signal.window_minutes}m]</b>\n\n"
                     f"{signal.question[:50]}\n"
                     f"BUY {signal.side} @ ${order_price:.4f}\n"
                     f"BTC: ${signal.btc_price:,.2f} ({signal.move_pct:+.3f}%)\n"
