@@ -27,3 +27,15 @@ archive.zip
 .cache
 .DS_Store
 local_db*
+
+# Logs (runtime output, not source)
+*.log
+!research/scanner_feedback.log
+logs/
+
+# IDE / editor configs
+.cursor/
+
+# Large or ephemeral files
+docs/images/Screenshot*.png
+nextsteps.md
