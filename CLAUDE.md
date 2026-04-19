@@ -270,6 +270,12 @@ Both approvals were set on-chain on April 13, 2026 — permanent, no expiry:
 
 The wallet stalker can now successfully execute exit trades when scottilicious or winner877 sells a position.
 
+## 2026-04-19: Pre-V2 Migration Prep
+
+**web3 major version upgrade (6.11.0 → 7.14.1).** The venv was upgraded from web3 v6 to v7 at some point. web3 7.x had breaking changes (middleware API, type handling, contract call patterns). The bots are running fine today, but watch for web3-related issues during V2 migration — specifically pUSD wrapping (`CollateralOnramp.wrap()` calls) and any new V2 contract ABI interactions. If something breaks on-chain, check web3 v7 migration guide first.
+
+**requirements.txt synced** with actual venv state. Old file was a fossil from initial project setup (172 lines, 88 packages not even installed). New file reflects the lean production venv (99 packages). Key version jumps: `py_clob_client` 0.17.5→0.34.6, `web3` 6.11→7.14, `openai` 1.37→2.29, `websockets` 12→15.
+
 ## Strategy Research
 
 Prefer backtests, paper/dry-run mode, or small test orders. Avoid advising large live risk without explicit request. Reference `agents/application/backtest.py` for the backtest harness and `docs/STRATEGY_RESEARCH.md` for research notes.
