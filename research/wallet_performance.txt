@@ -1,0 +1,155 @@
+WALLET MONITOR PERFORMANCE REPORT
+Generated: 2026-04-12
+Wallet: 0xD55a914800616d6a44E93327e164ac828CF146be
+
+================================================================================
+SUMMARY
+================================================================================
+
+Total copy signals detected:  19 (across dry-run + live)
+Dry-run signals (pre Apr 7):  11 (not executed on-chain)
+Live trades executed:          5 (Apr 10-11)
+Live trades blocked by risk:   4 (daily loss limit)
+
+All live trades copied scottilicious. No winner877 copies executed in live mode.
+
+================================================================================
+LIVE TRADES (real money, April 10-11)
+================================================================================
+
+#1  2026-04-10 23:25  EXECUTED
+    Market:   Will the Iranian regime fall by June 30?
+    Source:   scottilicious (BUY 12,250 sh @ $0.91 = $11,148)
+    Our bet:  BUY NO — 6.58 shares @ $0.92 ($6.05)
+    Order ID: 0x42bcfd62cdf20127be0f5fe32ad737d7a1245a0a8f4eff7b2099c9fd5914b7fc
+    FILLED:   YES — confirmed in Data API (6.58 sh @ $0.92)
+    Current:  NO price = $0.895 (was $0.92 at entry)
+    Status:   OPEN — unrealized loss ~$0.16
+    Notes:    scottilicious is buying YES (regime falls). We bought NO (regime stays).
+              This is CORRECT copy behavior — whale bought YES token, but Data API
+              reports the asset_id of the YES token. The bot bought that same token_id.
+              WAIT — see analysis below.
+
+#2  2026-04-11 01:18  EXECUTED
+    Market:   Will the Iranian regime fall by June 30?
+    Source:   scottilicious (BUY 167 sh @ $0.91 = $152)
+    Our bet:  BUY NO — 6.45 shares @ $0.92 ($5.93)
+    Order ID: 0x07ba2e037787331cd6b7401ee16d822520ad7661a7ef5ffe8f897510351b1883
+    FILLED:   YES — confirmed in Data API (6.32 sh @ $0.92)
+    Current:  NO price = $0.895
+    Status:   OPEN — unrealized loss ~$0.16
+
+#3  2026-04-11 03:32  EXECUTED
+    Market:   Will the Iranian regime fall by June 30?
+    Source:   scottilicious (BUY 55 sh @ $0.91 = $50)
+    Our bet:  BUY NO — 6.32 shares @ $0.92 ($5.81)
+    Order ID: 0xf869b9c73fbf69d3210ddceda443985bef62d0da2a3ca2459f29bf2377639d52
+    FILLED:   YES — confirmed in Data API (6.32 sh @ $0.92)
+    Current:  NO price = $0.895
+    Status:   OPEN — unrealized loss ~$0.16
+
+#4  2026-04-11 21:57  EXECUTED
+    Market:   Will Fidesz-KDNP win the most seats in the next Hungarian parliamentary election?
+    Source:   scottilicious (BUY 9,677 sh @ $0.78 = $7,548)
+    Our bet:  BUY — 7.12 shares @ $0.80 ($5.70)
+    Order ID: 0x081bb422a229a8ec2d90d4990ab20685c78d87e763826319b95c372be5f7b82a
+    FILLED:   YES — confirmed in Data API (7.12 sh @ $0.80, outcome=No)
+    Current:  NO price = $0.845
+    Status:   OPEN — unrealized gain ~$0.32
+
+#5  2026-04-11 21:58  EXECUTED
+    Market:   Will TISZA win the most seats in the next Hungarian parliamentary election?
+    Source:   scottilicious (BUY 1,987 sh @ $0.78 = $1,550)
+    Our bet:  BUY — 7.07 shares @ $0.79 ($5.58)
+    Order ID: 0xd1b4e224466a93ecf60a1b080cf431cd4b62acca80a1d57b531f39d7c2e34744
+    FILLED:   YES — confirmed in Data API (7.07 sh @ $0.79, outcome=Yes)
+    Current:  YES price = $0.845
+    Status:   OPEN — unrealized gain ~$0.39
+
+BLOCKED TRADES (risk manager rejected):
+    2026-04-11 05:16  Iranian regime fall (107 sh whale) — Daily loss limit exceeded
+    2026-04-11 05:53  Iranian regime fall (500 sh whale) — Daily loss limit exceeded
+    2026-04-11 05:58  Iranian regime fall (2000 sh whale) — Daily loss limit exceeded
+    2026-04-11 06:06  Iranian regime fall (665 sh whale) — Daily loss limit exceeded
+
+================================================================================
+LIVE TRADE PORTFOLIO SUMMARY
+================================================================================
+
+Position                                    Shares  Entry   Current  Unrealized
+---------------------------------------------------------------------------
+Iranian regime fall by Jun 30 (NO)          19.35   $0.92   $0.895   -$0.48
+Fidesz-KDNP most seats (NO)                 7.12   $0.80   $0.845   +$0.32
+TISZA most seats (YES)                       7.07   $0.79   $0.845   +$0.39
+---------------------------------------------------------------------------
+Total invested (wallet monitor):                            $29.07
+Unrealized P/L:                                             +$0.23
+
+NOTE: The Iranian regime position is 3 separate fills into the same market.
+      The Fidesz/TISZA trades are a paired bet on Hungarian elections.
+
+================================================================================
+CRITICAL ANALYSIS: SIDE COPYING
+================================================================================
+
+Looking at the Data API activity for our wallet vs the log:
+
+Trade #1-3 (Iranian regime fall):
+  - scottilicious bought YES (regime falls) at ~$0.91
+  - Our wallet shows: BUY NO at $0.92
+  - The bot's code sets our_side = trade.token_id (the whale's token)
+  - But our position is NO, not YES
+
+  This means either:
+  (a) The Data API "asset" field for scottilicious's trade was actually
+      the NO token (i.e., scottilicious was buying NO, not YES), OR
+  (b) Something in the order execution path mapped the token differently
+
+  Given scottilicious's $50K+ position in this market betting YES (regime
+  falls), and our tiny NO position — this needs investigation. If scottilicious
+  is actually buying YES and we're buying NO, we're betting AGAINST the whale.
+
+Trade #4-5 (Hungarian elections):
+  - scottilicious bought at $0.78
+  - We bought Fidesz NO at $0.80 and TISZA Yes at $0.79
+  - These are complementary bets (TISZA wins = Fidesz doesn't win most seats)
+  - Both are currently profitable
+
+================================================================================
+DRY-RUN SIGNALS (pre-April 7, NOT executed)
+================================================================================
+
+Date        Source          Market                                      Entry   Size
+2026-03-28  scottilicious   US-Iran nuclear deal by April 30?           $0.85   $10.09
+2026-03-30  winner877       Pistons vs. Thunder                         $0.91   $10.09
+2026-03-31  scottilicious   Will the Iranian regime fall by June 30?    $0.86   $10.09
+2026-04-01  scottilicious   US x Iran ceasefire by April 30?            $0.64   $10.93
+2026-04-01  scottilicious   US x Iran ceasefire by December 31?         $0.28   $10.93
+2026-04-01  scottilicious   US x Iran ceasefire by April 7?             $0.92   $10.93
+2026-04-01  scottilicious   US x Iran ceasefire by April 7? (2nd)       $0.92   $10.93
+2026-04-01  winner877       Spurs vs. Warriors                          $0.89   $10.93
+2026-04-02  scottilicious   Eric Swalwell CA Governor 2026?             $0.63   $10.93
+2026-04-03  scottilicious   US forces enter Iran by April 30?           $0.19   $10.93
+2026-04-03  scottilicious   US obtains Iranian enriched uranium May 31? $0.88   $10.43
+
+================================================================================
+OTHER OPEN POSITIONS (from directional V2 / other strategies)
+================================================================================
+
+Market                                          Side   Shares  Avg     Current
+Iran x Israel/US conflict ends by Apr 30 (NO)   No     83.33   $0.30   $0.455
+Next PM of Hungary = Peter Magyar (NO)           No     75.75   $0.33   $0.185
+Trump ends military ops vs Iran Apr 30 (NO)      No     52.08   $0.48   $0.77
+WTI Crude Oil $130 April (NO)                    No     51.02   $0.49   $0.77
+Iran x Israel/US conflict ends by Apr 15 (YES)   Yes    40.32   $0.62   $0.506
+Guinea-Bissau PT most seats (NO)                 No     12.04   $1.00   $0.813
+
+================================================================================
+CURRENT BALANCE
+================================================================================
+
+Wallet balance shown in latency bot: $296.63 (as of Apr 9)
+Wallet balance shown in wallet monitor: $285.08 (as of Apr 12, after live trades)
+
+Note: Balance dropped ~$50 since directional V2 trades on Apr 8 ($25 each
+on Iran conflict and Trump military ops markets).

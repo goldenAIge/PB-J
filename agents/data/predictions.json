@@ -1,0 +1,137 @@
+[
+  {
+    "market_id": "0x7eceae72d7d7b3e175fa872c728526e6fec4714288a4bda91fe818e298e69a6f",
+    "question": "Will WTI Crude Oil (WTI) hit (HIGH) $120 in April?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-07T15:14:45.075948+00:00",
+    "status": "unfilled",
+    "pnl": null
+  },
+  {
+    "market_id": "0x5c2e6aef8af5931e9bfa3750364626d754531d2fada2885d45c356b175962a25",
+    "question": "Iran x Israel/US conflict ends by April 15?",
+    "recommendation": "BUY_YES",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-08T01:14:50.059160+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0xa6ddb7146f48a12dbf73456d654211b01d7493829932c31b7fe85d82120d338f",
+    "question": "Iran x Israel/US conflict ends by April 30?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-08T15:15:21.515782+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0xfa59099fbda1e0f0058ed3cbd57e939fe90ab6d9b57d53bd488bcadf75c191d4",
+    "question": "Trump announces end of military operations against Iran by April 30th?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-08T15:15:26.498978+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0x35d8c42a467d4e485ffba50c5d2d984ed0793f4935319ca923b494798051c8ef",
+    "question": "Will WTI Crude Oil (WTI) hit (HIGH) $110 in April?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-13T15:14:59.078252+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0x924a2942747dd75703321a7c8d809c68f6a514c3b0f2a2e64274e02310634669",
+    "question": "Strait of Hormuz traffic returns to normal by end of April?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-13T15:15:04.354876+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0xb135b856c620ba8fbdda9f701f7d053bb8398b56d6ecbc19d009da94a181ea06",
+    "question": "Arizona Diamondbacks vs. Baltimore Orioles",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-14T00:16:57.386287+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0x5e257d023a43834ef25cb75be045e9c32048f1fa5e17020cf2f4f61c48ccc107",
+    "question": "Miami Marlins vs. Atlanta Braves",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-14T00:16:57.387339+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0x06a804e8bd1a539829b7db279ad33b2cf0bcf98f315a3b3a8c7623e6230d88fd",
+    "question": "Will Bitcoin reach $80,000 in April?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-14T04:15:41.899627+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0xceb6dfaa2cf5abc9d47ebc867b984a7715104944249274e8a483a2e17473e5f5",
+    "question": "US x Iran permanent peace deal by April 30, 2026?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-14T13:15:10.466888+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0xbbc6689d0f6d57ea42168836712237c7308b3e0118c8914d31b6126d0f3254c5",
+    "question": "US x Iran permanent peace deal by April 22, 2026?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-15T04:15:28.993727+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0x807ba575f84169bdb061dd05da3e8eb314a129aa152e31518c2aff9979d5f986",
+    "question": "Will Trump agree to Iranian enrichment of uranium in April?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-17T04:15:34.942896+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0x1507c50c86fb307e4f1acd9d740b2be66d98773f90d161e94907d8ef2c5699b3",
+    "question": "Trump announces end of military operations against Iran by April 21st?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-17T13:15:48.762963+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0x05ccbc3b7861349dc2fc0ce2c2bca9fd9671675171d7070abdf087ba1d7f085b",
+    "question": "Will WTI Crude Oil (WTI) hit (LOW) $80 in April?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-17T19:15:53.258677+00:00",
+    "status": "pending",
+    "pnl": null
+  },
+  {
+    "market_id": "0xd73f60114a0e7169a55082daef1228cb27fa50c939eea22cb0589f6bac6ce5d3",
+    "question": "Iran x Israel/US conflict ends by May 15?",
+    "recommendation": "BUY_NO",
+    "size_usdc": 0.0,
+    "timestamp": "2026-04-19T04:15:45.646171+00:00",
+    "status": "pending",
+    "pnl": null
+  }
+]

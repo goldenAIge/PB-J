@@ -17,6 +17,7 @@ Usage:
 
 import os
 import sys
+import ssl
 import json
 import time
 import asyncio
@@ -27,10 +28,14 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, NamedTuple
 from dataclasses import dataclass, asdict
 
+import certifi
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 import websockets
+
+# Build SSL context using certifi's CA bundle (macOS Python often lacks system certs)
+_ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 from agents.polymarket.polymarket import Polymarket
 from agents.polymarket.gamma import GammaMarketClient
@@ -53,18 +58,34 @@ logger = logging.getLogger(__name__)
 
 class CryptoLatencyConfig(BaseModel):
     """Configuration for crypto latency trading"""
-    min_price_move_pct: float = Field(default=0.15, description="BTC must move 0.15%+ from candle open")
-    max_entry_price: float = Field(default=0.65, description="Don't buy above $0.65 on Polymarket")
-    min_minutes_remaining: float = Field(default=2.0, description="Don't trade <2 min before resolution")
-    max_minutes_remaining: float = Field(default=14.0, description="Don't trade >14 min (too early, uncertain)")
+    min_price_move_pct: float = Field(default=0.40, description="Asset must move 0.40%+ from candle open (0.3% was too loose)")
+    min_entry_price: float = Field(default=0.65, description="Don't buy below $0.65 — bigger payoff zone, but need move>0.4% to qualify")
+    max_entry_price: float = Field(default=0.80, description="Don't buy above $0.80 (at $0.80: risk $8 to make $2, need 80% win rate)")
+    min_ev_per_dollar: float = Field(default=0.03, description="Min expected value per dollar risked to take a trade")
+    min_minutes_remaining: float = Field(default=1.5, description="Don't trade <1.5 min (book too thin)")
+    max_minutes_remaining: float = Field(default=4.0, description="Trade in the 1.5-4 min window")
     trade_percent: float = Field(default=0.15, description="15% of cash per trade")
     min_trade_size: float = Field(default=1.0, description="Min trade size in USDC")
-    max_trade_size: float = Field(default=10.0, description="Max trade size in USDC")
-    max_concurrent_positions: int = Field(default=5, description="Max open positions at once")
-    scan_interval: float = Field(default=30, description="Seconds between market scans")
+    max_trade_size: float = Field(default=25.0, description="Max trade size in USDC (used for 5m windows)")
+    max_trade_size_15m: Optional[float] = Field(default=25.0, description="Max trade size for 15m windows")
+    max_concurrent_positions: int = Field(default=3, description="Max open positions at once — limits correlated exposure")
+    cooldown_after_trade_secs: float = Field(default=120, description="Wait 2 min after any trade before taking another — prevents correlated bets")
+    scan_interval: float = Field(default=1, description="Seconds between fast-path price checks")
     order_timeout: float = Field(default=30, description="Cancel unfilled limit orders after N seconds")
-    asset: str = Field(default="btc", description="Crypto asset to trade (btc, eth, sol)")
+    assets: list[str] = Field(default=["btc", "eth", "sol"], description="Crypto assets to trade (btc, eth, sol — XRP dropped: negative P&L historically)")
     market_windows: list[int] = Field(default=[15], description="Market timeframes in minutes [5, 15]")
+
+
+@dataclass
+class StreakConfig:
+    """Configuration for streak (compounding) mode."""
+    enabled: bool = False
+    starting_amount: float = 20.0
+    profit_target: float = 0.0  # 0 = no target, run indefinitely
+    min_entry_price: float = 0.65
+    max_entry_price: float = 0.80
+    min_move_pct_5m: float = 0.40
+    min_move_pct_15m: float = 0.40
 
 
 class PricePoint(NamedTuple):
@@ -87,6 +108,7 @@ class TradeSignal:
     minutes_remaining: float
     end_date: str
     window_minutes: int = 15
+    asset: str = "btc"
 
 
 @dataclass
@@ -112,19 +134,22 @@ class LatencyTrade:
     actual_profit: Optional[float] = None  # Real P&L after resolution
     resolution_status: str = "pending"  # "pending", "win", "loss"
     event_slug: Optional[str] = None  # For re-querying resolution
+    is_streak: bool = False  # Whether this is a streak (compounding) trade
 
 
 class BinancePriceFeed:
     """
-    Real-time BTC price feed from Binance WebSocket.
+    Real-time crypto price feed from Binance WebSocket.
 
     Connects to Binance aggTrade stream for sub-100ms price updates.
     Stores prices in a deque for historical lookups (~20 minutes).
     """
 
-    BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/btcusdt@aggTrade"
+    BASE_WS_URL = "wss://stream.binance.com:9443/ws/"
 
-    def __init__(self, max_history_seconds: int = 1200):
+    def __init__(self, symbol: str = "btcusdt", max_history_seconds: int = 1200):
+        self.symbol = symbol.lower()
+        self._ws_url = f"{self.BASE_WS_URL}{self.symbol}@aggTrade"
         # ~10 updates/sec * 1200s = 12000 entries
         self._prices: deque[PricePoint] = deque(maxlen=12000)
         self._latest_price: Optional[float] = None
@@ -145,9 +170,9 @@ class BinancePriceFeed:
                 break
             await asyncio.sleep(0.1)
         if self._latest_price is not None:
-            logger.info(f"Binance price feed connected. BTC: ${self._latest_price:,.2f}")
+            logger.info(f"Binance price feed connected. {self.symbol.upper()}: ${self._latest_price:,.2f}")
         else:
-            logger.warning("Binance price feed started but no price received yet")
+            logger.warning(f"Binance price feed started ({self.symbol}) but no price received yet")
 
     async def stop(self):
         """Stop the WebSocket connection."""
@@ -165,13 +190,14 @@ class BinancePriceFeed:
         while self._running:
             try:
                 async with websockets.connect(
-                    self.BINANCE_WS_URL,
+                    self._ws_url,
+                    ssl=_ssl_context,
                     ping_interval=20,
                     ping_timeout=10,
                 ) as ws:
                     self._connected = True
                     self._reconnect_delay = 1.0
-                    logger.info("Binance WebSocket connected")
+                    logger.info(f"Binance WebSocket connected ({self.symbol})")
 
                     async for message in ws:
                         if not self._running:
@@ -255,6 +281,472 @@ class BinancePriceFeed:
         return self._connected and self._latest_price is not None
 
 
+@dataclass
+class BookSnapshot:
+    """Cached order book state from WebSocket."""
+    best_ask: Optional[float] = None
+    best_bid: Optional[float] = None
+    timestamp: float = 0.0  # time.time() of last update
+
+
+class PolymarketBookFeed:
+    """
+    Real-time Polymarket CLOB order book feed via WebSocket.
+
+    Replaces REST get_best_ask() calls (100-500ms each) with cached
+    prices updated in real-time (<1ms lookup). Falls back to REST
+    if cache is stale (>5s since last update).
+    """
+
+    WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+
+    def __init__(self):
+        self._books: dict[str, BookSnapshot] = {}  # token_id -> snapshot
+        self._subscribed_tokens: set[str] = set()
+        self._connected: bool = False
+        self._ws = None
+        self._ws_task: Optional[asyncio.Task] = None
+        self._ping_task: Optional[asyncio.Task] = None
+        self._reconnect_delay: float = 1.0
+        self._max_reconnect_delay: float = 30.0
+        self._running: bool = False
+
+    async def start(self, token_ids: Optional[list[str]] = None):
+        """Start the WebSocket connection and optionally subscribe to tokens."""
+        self._running = True
+        self._initial_token_ids = token_ids or []
+        self._ws_task = asyncio.create_task(self._run_forever())
+        # Wait for connection (up to 10 seconds)
+        for _ in range(100):
+            if self._connected:
+                break
+            await asyncio.sleep(0.1)
+        if self._connected:
+            logger.info(f"Polymarket book feed connected (tracking {len(self._subscribed_tokens)} tokens)")
+        else:
+            logger.warning("Polymarket book feed started but not yet connected")
+
+    async def stop(self):
+        """Stop the WebSocket connection."""
+        self._running = False
+        if self._ping_task:
+            self._ping_task.cancel()
+            try:
+                await self._ping_task
+            except asyncio.CancelledError:
+                pass
+        if self._ws_task:
+            self._ws_task.cancel()
+            try:
+                await self._ws_task
+            except asyncio.CancelledError:
+                pass
+        self._connected = False
+
+    async def subscribe(self, token_ids: list[str]):
+        """Subscribe to additional token IDs (dynamic, after initial connect)."""
+        new_ids = [tid for tid in token_ids if tid not in self._subscribed_tokens]
+        if not new_ids:
+            return
+        self._subscribed_tokens.update(new_ids)
+        if self._ws and self._connected:
+            try:
+                msg = json.dumps({"assets_ids": new_ids, "operation": "subscribe"})
+                await self._ws.send(msg)
+                logger.info(f"Book feed: subscribed to {len(new_ids)} new tokens")
+            except Exception as e:
+                logger.warning(f"Book feed subscribe failed: {e}")
+
+    async def unsubscribe(self, token_ids: list[str]):
+        """Unsubscribe from token IDs."""
+        old_ids = [tid for tid in token_ids if tid in self._subscribed_tokens]
+        if not old_ids:
+            return
+        self._subscribed_tokens -= set(old_ids)
+        # Clean up stale book data
+        for tid in old_ids:
+            self._books.pop(tid, None)
+        if self._ws and self._connected:
+            try:
+                msg = json.dumps({"assets_ids": old_ids, "operation": "unsubscribe"})
+                await self._ws.send(msg)
+                logger.info(f"Book feed: unsubscribed from {len(old_ids)} tokens")
+            except Exception as e:
+                logger.warning(f"Book feed unsubscribe failed: {e}")
+
+    def get_best_ask(self, token_id: str) -> Optional[float]:
+        """Return cached best ask price (<1ms). None if no data."""
+        snap = self._books.get(token_id)
+        if snap and snap.best_ask is not None:
+            return snap.best_ask
+        return None
+
+    def get_best_bid(self, token_id: str) -> Optional[float]:
+        """Return cached best bid price (<1ms). None if no data."""
+        snap = self._books.get(token_id)
+        if snap and snap.best_bid is not None:
+            return snap.best_bid
+        return None
+
+    def is_fresh(self, token_id: str, max_age: float = 5.0) -> bool:
+        """Check if cached data is fresh enough (within max_age seconds)."""
+        snap = self._books.get(token_id)
+        if not snap or snap.timestamp == 0:
+            return False
+        return (time.time() - snap.timestamp) < max_age
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    async def _run_forever(self):
+        """Maintain WebSocket connection with auto-reconnect."""
+        while self._running:
+            try:
+                async with websockets.connect(
+                    self.WS_URL,
+                    ssl=_ssl_context,
+                    ping_interval=None,  # We handle our own PING
+                    ping_timeout=None,
+                ) as ws:
+                    self._ws = ws
+                    self._connected = True
+                    self._reconnect_delay = 1.0
+                    logger.info("Polymarket book WebSocket connected")
+
+                    # Send initial subscription
+                    all_tokens = list(self._subscribed_tokens) + self._initial_token_ids
+                    if all_tokens:
+                        unique = list(set(all_tokens))
+                        self._subscribed_tokens = set(unique)
+                        msg = json.dumps({"type": "market", "assets_ids": unique})
+                        await ws.send(msg)
+                        logger.info(f"Book feed: initial subscription for {len(unique)} tokens")
+                    else:
+                        # Subscribe with empty to establish connection
+                        await ws.send(json.dumps({"type": "market", "assets_ids": []}))
+
+                    # Start PING loop
+                    self._ping_task = asyncio.create_task(self._ping_loop(ws))
+
+                    async for message in ws:
+                        if not self._running:
+                            break
+                        self._handle_message(message)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self._connected = False
+                self._ws = None
+                if self._running:
+                    logger.warning(f"Polymarket book WS error: {e}. Reconnecting in {self._reconnect_delay:.0f}s...")
+                    await asyncio.sleep(self._reconnect_delay)
+                    self._reconnect_delay = min(self._reconnect_delay * 2, self._max_reconnect_delay)
+
+    async def _ping_loop(self, ws):
+        """Send PING every 10 seconds to keep connection alive."""
+        try:
+            while self._running:
+                await asyncio.sleep(10)
+                try:
+                    await ws.send("PING")
+                except Exception:
+                    break
+        except asyncio.CancelledError:
+            pass
+
+    def _handle_message(self, raw: str):
+        """Parse WebSocket message and route by event_type."""
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        # Messages arrive as JSON arrays
+        events = data if isinstance(data, list) else [data]
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            event_type = event.get("event_type", "")
+            if event_type == "book":
+                self._handle_book_event(event)
+            elif event_type == "price_change":
+                self._handle_price_change(event)
+            elif event_type == "last_trade_price":
+                self._handle_price_change(event)  # Same structure for our purposes
+
+    def _handle_book_event(self, data: dict):
+        """Handle full order book snapshot — update best bid/ask."""
+        asset_id = data.get("asset_id", "")
+        if not asset_id:
+            return
+
+        now = time.time()
+        snap = self._books.get(asset_id) or BookSnapshot()
+
+        # Parse asks — find lowest price
+        asks = data.get("asks", [])
+        if asks:
+            try:
+                snap.best_ask = min(float(a.get("price", 999)) for a in asks if a.get("price"))
+            except (ValueError, TypeError):
+                pass
+
+        # Parse bids — find highest price
+        bids = data.get("bids", [])
+        if bids:
+            try:
+                snap.best_bid = max(float(b.get("price", 0)) for b in bids if b.get("price"))
+            except (ValueError, TypeError):
+                pass
+
+        snap.timestamp = now
+        self._books[asset_id] = snap
+
+    def _handle_price_change(self, data: dict):
+        """Handle incremental price change — update best bid/ask."""
+        asset_id = data.get("asset_id", "")
+        if not asset_id:
+            return
+
+        now = time.time()
+        snap = self._books.get(asset_id) or BookSnapshot()
+
+        # price_change events include price and side fields,
+        # or direct best_bid/best_ask fields
+        for key in ("best_ask",):
+            val = data.get(key)
+            if val is not None:
+                try:
+                    snap.best_ask = float(val)
+                except (ValueError, TypeError):
+                    pass
+        for key in ("best_bid",):
+            val = data.get(key)
+            if val is not None:
+                try:
+                    snap.best_bid = float(val)
+                except (ValueError, TypeError):
+                    pass
+
+        # Some events use "price" with a "side" indicator
+        price = data.get("price")
+        side = data.get("side")
+        if price is not None and side is not None:
+            try:
+                p = float(price)
+                # Polymarket uses "sell"/"SELL" for asks, "buy"/"BUY" for bids
+                if side.upper() == "SELL":
+                    snap.best_ask = p
+                elif side.upper() == "BUY":
+                    snap.best_bid = p
+            except (ValueError, TypeError):
+                pass
+
+        snap.timestamp = now
+        self._books[asset_id] = snap
+
+
+class PolymarketOrderFeed:
+    """
+    Real-time Polymarket user order/trade feed via WebSocket.
+
+    Replaces 1-second REST polling for fill detection with push
+    notifications. When an order fills, the WebSocket sends a
+    trade event immediately.
+    """
+
+    WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
+
+    def __init__(self):
+        self._fill_events: dict[str, asyncio.Event] = {}  # order_id -> Event
+        self._fill_results: dict[str, dict] = {}           # order_id -> fill data
+        self._connected: bool = False
+        self._ws = None
+        self._ws_task: Optional[asyncio.Task] = None
+        self._ping_task: Optional[asyncio.Task] = None
+        self._reconnect_delay: float = 1.0
+        self._max_reconnect_delay: float = 30.0
+        self._running: bool = False
+        self._credentials: Optional[dict] = None
+        self._market_ids: list[str] = []
+
+    async def start(self, credentials: dict, market_ids: Optional[list[str]] = None):
+        """
+        Start the user WebSocket with authentication.
+
+        credentials: {"apiKey": "...", "secret": "...", "passphrase": "..."}
+        market_ids: condition IDs to subscribe to
+        """
+        self._running = True
+        self._credentials = credentials
+        self._market_ids = market_ids or []
+        self._ws_task = asyncio.create_task(self._run_forever())
+        # Wait for connection
+        for _ in range(100):
+            if self._connected:
+                break
+            await asyncio.sleep(0.1)
+        if self._connected:
+            logger.info("Polymarket order feed connected")
+        else:
+            logger.warning("Polymarket order feed started but not yet connected")
+
+    async def stop(self):
+        """Stop the WebSocket connection."""
+        self._running = False
+        if self._ping_task:
+            self._ping_task.cancel()
+            try:
+                await self._ping_task
+            except asyncio.CancelledError:
+                pass
+        if self._ws_task:
+            self._ws_task.cancel()
+            try:
+                await self._ws_task
+            except asyncio.CancelledError:
+                pass
+        self._connected = False
+
+    async def wait_for_fill(self, order_id: str, timeout: float = 30) -> bool:
+        """
+        Wait for an order to fill via WebSocket push notification.
+
+        Returns True if filled, False if timeout.
+        """
+        if not order_id:
+            return False
+
+        # Create an Event for this order
+        event = asyncio.Event()
+        self._fill_events[order_id] = event
+
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
+        finally:
+            # Cleanup
+            self._fill_events.pop(order_id, None)
+            self._fill_results.pop(order_id, None)
+
+    async def subscribe_markets(self, condition_ids: list[str]):
+        """Subscribe to additional market condition IDs."""
+        if not condition_ids or not self._ws or not self._connected:
+            return
+        try:
+            msg = json.dumps({"markets": condition_ids, "operation": "subscribe"})
+            await self._ws.send(msg)
+        except Exception as e:
+            logger.warning(f"Order feed subscribe failed: {e}")
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    async def _run_forever(self):
+        """Maintain WebSocket connection with auto-reconnect."""
+        while self._running:
+            try:
+                async with websockets.connect(
+                    self.WS_URL,
+                    ssl=_ssl_context,
+                    ping_interval=None,
+                    ping_timeout=None,
+                ) as ws:
+                    self._ws = ws
+                    self._connected = True
+                    self._reconnect_delay = 1.0
+                    logger.info("Polymarket order WebSocket connected")
+
+                    # Send auth subscription
+                    sub_msg = {
+                        "type": "user",
+                        "markets": self._market_ids,
+                        "auth": self._credentials,
+                    }
+                    await ws.send(json.dumps(sub_msg))
+
+                    # Start PING loop
+                    self._ping_task = asyncio.create_task(self._ping_loop(ws))
+
+                    async for message in ws:
+                        if not self._running:
+                            break
+                        self._handle_message(message)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self._connected = False
+                self._ws = None
+                if self._running:
+                    logger.warning(f"Polymarket order WS error: {e}. Reconnecting in {self._reconnect_delay:.0f}s...")
+                    await asyncio.sleep(self._reconnect_delay)
+                    self._reconnect_delay = min(self._reconnect_delay * 2, self._max_reconnect_delay)
+
+    async def _ping_loop(self, ws):
+        """Send PING every 10 seconds."""
+        try:
+            while self._running:
+                await asyncio.sleep(10)
+                try:
+                    await ws.send("PING")
+                except Exception:
+                    break
+        except asyncio.CancelledError:
+            pass
+
+    def _handle_message(self, raw: str):
+        """Parse WebSocket message and route by event_type."""
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        events = data if isinstance(data, list) else [data]
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            event_type = event.get("event_type", "")
+            if event_type == "trade":
+                self._handle_trade_event(event)
+            elif event_type == "order":
+                self._handle_order_event(event)
+
+    def _handle_trade_event(self, data: dict):
+        """Handle trade fill notification — signal waiting callers."""
+        # Trade events contain "taker_order_id" and/or "maker_order_id"
+        for key in ("taker_order_id", "maker_order_id", "orderID", "order_id", "id"):
+            oid = data.get(key)
+            if oid and oid in self._fill_events:
+                self._fill_results[oid] = data
+                self._fill_events[oid].set()
+                logger.info(f"Order feed: fill detected for {oid}")
+                return
+
+        # Also check nested "associated_trades" patterns
+        order_id = data.get("associatedOrderId") or data.get("orderId")
+        if order_id and order_id in self._fill_events:
+            self._fill_results[order_id] = data
+            self._fill_events[order_id].set()
+            logger.info(f"Order feed: fill detected for {order_id}")
+
+    def _handle_order_event(self, data: dict):
+        """Handle order status update — detect fill via status change."""
+        oid = data.get("id") or data.get("orderID") or data.get("order_id")
+        status = (data.get("status") or data.get("order_status") or "").lower()
+
+        if oid and oid in self._fill_events:
+            if "matched" in status or "filled" in status:
+                self._fill_results[oid] = data
+                self._fill_events[oid].set()
+                logger.info(f"Order feed: order {oid} status={status}")
+
+
 class CryptoLatencyBot:
     """
     Crypto Latency Trading Bot for Polymarket.
@@ -269,10 +761,22 @@ class CryptoLatencyBot:
         risk_config: Optional[RiskConfig] = None,
         dry_run: bool = True,
         simulated_balance: Optional[float] = None,
+        streak_config: Optional[StreakConfig] = None,
+        initial_wins: int = 0,
+        initial_losses: int = 0,
+        initial_pnl: float = 0.0,
+        initial_streak_wins: int = 0,
     ):
         self.config = config or CryptoLatencyConfig()
         self.dry_run = dry_run
         self.simulated_balance = simulated_balance
+
+        # Streak (compounding) mode state
+        self.streak_config = streak_config or StreakConfig()
+        self.streak_balance: float = self.streak_config.starting_amount if self.streak_config.enabled else 0.0
+        self.streak_state: str = "idle" if self.streak_config.enabled else "disabled"
+        self.streak_trade: Optional[LatencyTrade] = None
+        self.streak_wins: int = initial_streak_wins
 
         # Core services
         self.polymarket = Polymarket()
@@ -281,12 +785,23 @@ class CryptoLatencyBot:
         self.risk_manager = PortfolioRiskManager(self.polymarket, self.risk_config)
         self.telegram = TelegramAlerter()
 
-        # Binance price feed
-        self.price_feed = BinancePriceFeed()
+        # Binance price feeds — one per asset
+        self.price_feeds: dict[str, BinancePriceFeed] = {}
+        for asset in self.config.assets:
+            symbol = f"{asset.lower()}usdt"
+            self.price_feeds[asset.lower()] = BinancePriceFeed(symbol=symbol)
+        # Backward compat alias
+        self.price_feed = self.price_feeds.get("btc") or list(self.price_feeds.values())[0]
+
+        # Polymarket WebSocket feeds (replace REST polling)
+        self.book_feed = PolymarketBookFeed()
+        self.order_feed: Optional[PolymarketOrderFeed] = PolymarketOrderFeed() if not dry_run else None
+        self._subscribed_book_tokens: set[str] = set()
 
         # Trading state
         self.active_orders: dict[str, dict] = {}  # order_id -> order info
         self.traded_markets: set[str] = set()  # market IDs already traded this session
+        self.traded_windows: set[str] = set()  # "endDate" keys — 1 trade per time window
         self.position_count: int = 0
         self.total_trades: int = 0
         self.successful_trades: int = 0
@@ -295,13 +810,16 @@ class CryptoLatencyBot:
         self.initial_balance: Optional[float] = None
         self.simulated_pnl: float = 0.0
 
+        # Trade cooldown — prevent correlated bets in rapid succession
+        self._last_trade_time: float = 0.0
+
         # Resolution verification
         self.pending_resolutions: list[LatencyTrade] = []  # Trades awaiting resolution
-        self.verified_wins: int = 0
-        self.verified_losses: int = 0
-        self.verified_pnl: float = 0.0  # Actual P&L from resolved trades
+        self.verified_wins: int = initial_wins
+        self.verified_losses: int = initial_losses
+        self.verified_pnl: float = initial_pnl  # Actual P&L from resolved trades
 
-        logger.info(f"CryptoLatencyBot initialized (dry_run={dry_run}, asset={self.config.asset})")
+        logger.info(f"CryptoLatencyBot initialized (dry_run={dry_run}, assets={self.config.assets})")
         logger.info(f"Config: {self.config.model_dump()}")
 
     def get_balance(self) -> float:
@@ -311,90 +829,157 @@ class CryptoLatencyBot:
         return self.risk_manager.get_balance()
 
     def find_active_markets(self) -> list[dict]:
-        """Find active crypto markets across all configured timeframes."""
+        """Find active crypto markets across all configured assets and timeframes."""
         all_markets = []
-        for window in self.config.market_windows:
-            try:
-                markets = self.gamma.get_crypto_markets(
-                    asset=self.config.asset,
-                    window_minutes=window,
-                )
-                all_markets.extend(markets)
-            except Exception as e:
-                logger.error(f"Failed to fetch {window}-min markets: {e}")
+        for asset in self.config.assets:
+            for window in self.config.market_windows:
+                try:
+                    markets = self.gamma.get_crypto_markets(
+                        asset=asset,
+                        window_minutes=window,
+                    )
+                    all_markets.extend(markets)
+                except Exception as e:
+                    logger.error(f"Failed to fetch {asset} {window}-min markets: {e}")
         return all_markets
 
     def get_candle_open_price(self, market: dict) -> Optional[float]:
         """
-        Derive the BTC price at the start of a market candle.
+        Derive the asset price at the start of a market candle.
 
         The market endDate minus window_minutes = candle start time.
-        Look up BTC price at that timestamp from our stored history.
+        Look up price at that timestamp from the correct asset's price feed.
         """
         end_date_str = market.get("endDate", "")
         if not end_date_str:
             return None
+
+        asset = market.get("_asset", "btc")
+        feed = self.price_feeds.get(asset, self.price_feed)
 
         window_minutes = market.get("_window_minutes", 15)
         try:
             end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
             start_time = end_date - timedelta(minutes=window_minutes)
             start_ts = start_time.timestamp()
-            return self.price_feed.get_price_at(start_ts)
+            return feed.get_price_at(start_ts)
         except Exception:
             return None
 
+    def _estimate_win_probability(self, move_pct: float, minutes_remaining: float, entry_price: float, window_minutes: int = 15) -> float:
+        """
+        Estimate probability of winning based on move size, time, and market price.
+
+        Uses a blend of:
+        1. Market-implied probability (entry_price itself — the market's estimate)
+        2. Move-size confidence boost (bigger moves are more likely to hold)
+        3. Time decay (less time = less chance of reversal = higher confidence)
+
+        Returns estimated win probability (0.0 to 1.0).
+        """
+        # Start with market-implied probability (the entry price IS the market's estimate)
+        market_prob = entry_price
+
+        # Move-size confidence: bigger moves are harder to reverse
+        # At 0.30% move, minimal confidence boost. At 1%+, strong boost.
+        abs_move = abs(move_pct)
+        if abs_move >= 1.0:
+            move_boost = 0.10
+        elif abs_move >= 0.5:
+            move_boost = 0.06
+        elif abs_move >= 0.35:
+            move_boost = 0.03
+        else:
+            move_boost = 0.0
+
+        # Time remaining: less time = higher confidence (less room for reversal)
+        # At 1.5 min, high confidence. At 4.0 min, lower.
+        if minutes_remaining <= 2.0:
+            time_boost = 0.05
+        elif minutes_remaining <= 3.0:
+            time_boost = 0.02
+        else:
+            time_boost = 0.0
+
+        # Combined estimate, capped at 0.98
+        estimated_prob = min(0.98, market_prob + move_boost + time_boost)
+        return estimated_prob
+
+    def _calculate_ev(self, entry_price: float, win_prob: float, trade_size: float) -> float:
+        """
+        Calculate expected value of a trade.
+
+        EV = (win_prob * profit_if_win) - (loss_prob * loss_if_loss)
+        where profit_if_win = trade_size * (1/entry_price - 1)
+              loss_if_loss = trade_size
+        """
+        profit_if_win = trade_size * (1.0 / entry_price - 1.0)
+        loss_if_loss = trade_size
+        ev = (win_prob * profit_if_win) - ((1.0 - win_prob) * loss_if_loss)
+        return ev
+
+    def _kelly_fraction(self, entry_price: float, win_prob: float) -> float:
+        """
+        Kelly criterion for binary outcome.
+
+        f* = (b*p - q) / b
+        where b = (1 - entry_price) / entry_price (net odds)
+              p = win_prob, q = 1 - p
+
+        Returns fraction of bankroll to bet (0.25x Kelly for safety).
+        """
+        b = (1.0 - entry_price) / entry_price  # net odds
+        q = 1.0 - win_prob
+        kelly = (b * win_prob - q) / b if b > 0 else 0.0
+        # Use fractional Kelly (25%) for safety — full Kelly is too aggressive
+        return max(0.0, kelly * 0.25)
+
     def _get_required_move_pct(self, minutes_remaining: float, window_minutes: int = 15) -> float:
         """
-        Time-scaled entry threshold: require bigger moves early in candle.
+        Time-scaled entry threshold for the 1.5-4 minute window.
 
-        Rationale: Early in the candle there's more time for price to reverse,
-        so we need stronger conviction. Near the close, a smaller move is
-        already nearly locked in.
+        We enter when there's still liquidity on the book (1.5-4 min)
+        but BTC has moved decisively. Require bigger moves when more
+        time remains for potential reversal.
 
-        15-min scale:
-            12+ min left → 0.40% move required
-             8  min left → 0.30%
-             5  min left → 0.20%
-             2  min left → 0.15% (config minimum)
+        15-min candles:
+            3.0+ min left → 0.45%
+            2.0+ min left → 0.35%
+            <2.0 min left → 0.30% (floor)
 
-        5-min scale (proportionally scaled):
-             4+ min left → 0.40%
-           2.5  min left → 0.25%
-           1.5  min left → 0.15%
-             0  min left → 0.10%
+        5-min candles:
+            3.0+ min left → 0.35%
+            2.0+ min left → 0.25%
+            <2.0 min left → 0.20% (floor)
         """
         if window_minutes <= 5:
-            if minutes_remaining >= 4:
+            if minutes_remaining >= 3.0:
+                return 0.45
+            elif minutes_remaining >= 2.0:
                 return 0.40
-            elif minutes_remaining >= 2.5:
-                return 0.25
-            elif minutes_remaining >= 1.5:
-                return 0.15
             else:
-                return 0.10
+                return 0.35
         else:
             # 15-min (default)
-            if minutes_remaining >= 12:
+            if minutes_remaining >= 3.0:
+                return 0.50
+            elif minutes_remaining >= 2.0:
                 return 0.40
-            elif minutes_remaining >= 8:
-                return 0.30
-            elif minutes_remaining >= 5:
-                return 0.20
             else:
-                return self.config.min_price_move_pct  # 0.15
+                return 0.35
 
-    def _check_trend_filter(self, winning_side: str) -> bool:
+    def _check_trend_filter(self, winning_side: str, asset: str = "btc") -> bool:
         """
         Trend filter: only trade WITH the macro trend, never against it.
 
-        Checks BTC direction over the last 10 minutes of price history.
-        If BTC is trending up, only allow "Up" trades. If trending down,
+        Checks asset direction over the last 10 minutes of price history.
+        If trending up, only allow "Up" trades. If trending down,
         only allow "Down" trades. If flat/unclear, allow either.
 
         Returns True if the trade is aligned with the trend (or trend is unclear).
         """
-        prices = self.price_feed._prices
+        feed = self.price_feeds.get(asset, self.price_feed)
+        prices = feed._prices
         if len(prices) < 100:
             # Not enough data to determine trend, allow trade
             return True
@@ -427,18 +1012,64 @@ class CryptoLatencyBot:
         logger.info(f"  Trend check OK: {winning_side} aligns with 10min trend ({trend_pct:+.3f}%)")
         return True
 
+    def _check_momentum(self, winning_side: str, asset: str = "btc") -> bool:
+        """
+        30-second momentum check: asset must still be moving in the
+        winning direction, not reversing. This prevents entering
+        trades where the asset has already started to turn around.
+        """
+        feed = self.price_feeds.get(asset, self.price_feed)
+        prices = feed._prices
+        if len(prices) < 30:
+            return False  # Not enough data — BLOCK trade (be conservative)
+
+        now_ts = prices[-1].timestamp
+        lookback_ts = now_ts - 30  # 30 seconds ago
+
+        price_30s_ago = None
+        for point in prices:
+            if point.timestamp >= lookback_ts:
+                price_30s_ago = point.price
+                break
+
+        if price_30s_ago is None or price_30s_ago <= 0:
+            return False
+
+        current = prices[-1].price
+        momentum_pct = ((current - price_30s_ago) / price_30s_ago) * 100.0
+
+        asset_upper = asset.upper()
+        if winning_side == "Up" and momentum_pct < -0.10:
+            logger.info(f"  MOMENTUM BLOCK: {asset_upper} falling ({momentum_pct:+.4f}% in 30s) — skip {winning_side}")
+            return False
+        if winning_side == "Down" and momentum_pct > 0.10:
+            logger.info(f"  MOMENTUM BLOCK: {asset_upper} rising ({momentum_pct:+.4f}% in 30s) — skip {winning_side}")
+            return False
+
+        logger.info(f"  Momentum OK: {asset_upper} {momentum_pct:+.4f}% in 30s (aligns with {winning_side})")
+        return True
+
     def _check_orderbook_price(self, token_id: str) -> Optional[float]:
         """
         Check the real CLOB best ask price for a token.
 
-        The Gamma API `outcomePrices` can be stale. The CLOB order book
-        shows the actual current ask price. If the winning side is
-        already expensive on the book, the edge is gone.
+        Tries WebSocket cache first (<1ms), falls back to REST (100-500ms).
 
         Returns the best ask price, or None if the check fails.
         """
+        # Try WebSocket cache first (<1ms)
+        if self.book_feed.connected and self.book_feed.is_fresh(token_id):
+            price = self.book_feed.get_best_ask(token_id)
+            if price is not None:
+                logger.debug(f"Book price WS cache hit: {token_id[:8]}... = ${price:.4f}")
+                return price
+
+        # REST fallback
         try:
-            return self.polymarket.get_best_ask(token_id)
+            price = self.polymarket.get_best_ask(token_id)
+            if price is not None:
+                logger.debug(f"Book price REST fallback: {token_id[:8]}... = ${price:.4f}")
+            return price
         except Exception as e:
             logger.debug(f"Order book price check failed: {e}")
             return None
@@ -451,14 +1082,20 @@ class CryptoLatencyBot:
         1. Minutes remaining in valid window
         2. BTC has moved enough from candle open (time-scaled threshold)
         3. Trend filter: only trade WITH the 10-min BTC trend
-        4. Polymarket price for winning side is < max_entry_price
+        4. Polymarket price for winning side is >= min_entry_price
         5. Order book price verification (real price, not stale API)
         """
         market_id = str(market.get("id", ""))
         window_minutes = market.get("_window_minutes", 15)
 
-        # Skip if already traded
+        # Skip if already traded this market
         if market_id in self.traded_markets:
+            return None
+
+        # Skip if already traded this time window (1 trade per window across all assets)
+        end_date_str = market.get("endDate", "")
+        window_key = f"{window_minutes}m_{end_date_str}"
+        if window_key in self.traded_windows:
             return None
 
         # Skip if on cooldown
@@ -466,7 +1103,6 @@ class CryptoLatencyBot:
             return None
 
         # Check minutes remaining
-        end_date_str = market.get("endDate", "")
         if not end_date_str:
             return None
 
@@ -483,19 +1119,21 @@ class CryptoLatencyBot:
         if minutes_remaining > self.config.max_minutes_remaining:
             return None
 
-        # Get current BTC price
-        price_data = self.price_feed.get_price()
+        # Get current asset price from the correct feed
+        asset = market.get("_asset", "btc")
+        feed = self.price_feeds.get(asset, self.price_feed)
+        price_data = feed.get_price()
         if price_data is None:
             return None
-        btc_now, _ = price_data
+        price_now, _ = price_data
 
-        # Get BTC price at candle open
-        btc_open = self.get_candle_open_price(market)
-        if btc_open is None or btc_open <= 0:
+        # Get asset price at candle open
+        price_open = self.get_candle_open_price(market)
+        if price_open is None or price_open <= 0:
             return None
 
         # Calculate move percentage
-        move_pct = ((btc_now - btc_open) / btc_open) * 100.0
+        move_pct = ((price_now - price_open) / price_open) * 100.0
 
         # TIME-SCALED THRESHOLD: require bigger moves early in candle
         required_move = self._get_required_move_pct(minutes_remaining, window_minutes)
@@ -509,8 +1147,12 @@ class CryptoLatencyBot:
         else:
             winning_side = "Down"
 
-        # TREND FILTER: only trade WITH the macro trend
-        if not self._check_trend_filter(winning_side):
+        # TREND FILTER: only trade WITH the 10-min macro trend (uses correct asset feed)
+        if not self._check_trend_filter(winning_side, asset):
+            return None
+
+        # MOMENTUM CHECK: asset must still be moving in winning direction
+        if not self._check_momentum(winning_side, asset):
             return None
 
         # Get token IDs and prices
@@ -548,22 +1190,31 @@ class CryptoLatencyBot:
         token_id = clob_token_ids[token_idx]
         polymarket_price = float(outcome_prices[token_idx])
 
-        # ORDER BOOK PRICE CHECK: use real CLOB price instead of stale API price
+        # ORDER BOOK PRICE CHECK: MUST use real CLOB price — API prices are stale
         real_price = self._check_orderbook_price(token_id)
-        if real_price is not None:
-            if abs(real_price - polymarket_price) > 0.05:
-                logger.info(f"  Price divergence: API=${polymarket_price:.4f} vs Book=${real_price:.4f}")
-            # Use the real price for entry decision
-            polymarket_price = real_price
-
-        # Check Polymarket price is still cheap enough
-        if polymarket_price >= self.config.max_entry_price:
-            logger.info(f"  SKIP: {winning_side} price ${polymarket_price:.4f} >= max ${self.config.max_entry_price}")
+        if real_price is None:
+            logger.info(f"  SKIP: No order book data for {winning_side} — can't trade without real price")
             return None
 
-        # Also skip if price is too low (might indicate the market is illiquid or broken)
-        if polymarket_price < 0.30:
+        if abs(real_price - polymarket_price) > 0.05:
+            logger.info(f"  Price divergence: API=${polymarket_price:.4f} vs Book=${real_price:.4f}")
+        polymarket_price = real_price
+
+        # Check Polymarket price is in valid range
+        if polymarket_price < self.config.min_entry_price:
+            logger.info(f"  SKIP: {winning_side} price ${polymarket_price:.4f} < min ${self.config.min_entry_price} — too cheap/uncertain")
             return None
+        if polymarket_price > self.config.max_entry_price:
+            logger.info(f"  SKIP: {winning_side} price ${polymarket_price:.4f} > max ${self.config.max_entry_price} — no edge")
+            return None
+
+        # EV FILTER: Only trade when expected value is positive
+        win_prob = self._estimate_win_probability(move_pct, minutes_remaining, polymarket_price, window_minutes)
+        ev_per_dollar = (win_prob * (1.0 / polymarket_price - 1.0)) - (1.0 - win_prob)
+        if ev_per_dollar < self.config.min_ev_per_dollar:
+            logger.info(f"  SKIP: EV too low — win_prob={win_prob:.1%}, entry=${polymarket_price:.2f}, EV/$ = {ev_per_dollar:+.3f} (min {self.config.min_ev_per_dollar})")
+            return None
+        logger.info(f"  EV CHECK OK: win_prob={win_prob:.1%}, entry=${polymarket_price:.2f}, EV/$ = {ev_per_dollar:+.3f}")
 
         return TradeSignal(
             market_id=market_id,
@@ -571,12 +1222,13 @@ class CryptoLatencyBot:
             token_id=token_id,
             side=winning_side,
             suggested_price=polymarket_price,
-            btc_price=btc_now,
-            btc_open_price=btc_open,
+            btc_price=price_now,
+            btc_open_price=price_open,
             move_pct=move_pct,
             minutes_remaining=minutes_remaining,
             end_date=end_date_str,
             window_minutes=window_minutes,
+            asset=asset,
         )
 
     async def execute_trade(self, signal: TradeSignal) -> Optional[LatencyTrade]:
@@ -585,10 +1237,29 @@ class CryptoLatencyBot:
 
         Places a GTC limit order, waits for fill, cancels if timeout.
         """
+        # Cooldown: don't stack trades within 2 minutes of each other
+        elapsed = time.time() - self._last_trade_time
+        if elapsed < self.config.cooldown_after_trade_secs:
+            remaining = self.config.cooldown_after_trade_secs - elapsed
+            logger.info(f"COOLDOWN: {remaining:.0f}s left — skipping to avoid correlated bets")
+            return None
+
         balance = self.get_balance()
-        trade_size = balance * self.config.trade_percent
-        trade_size = min(trade_size, self.config.max_trade_size)
+        # Per-window trade sizing: 15m gets its own cap if configured
+        if signal.window_minutes >= 15 and self.config.max_trade_size_15m is not None:
+            max_size = self.config.max_trade_size_15m
+        else:
+            max_size = self.config.max_trade_size
+
+        # Kelly-based sizing: bet more when edge is stronger, less when marginal
+        win_prob = self._estimate_win_probability(
+            signal.move_pct, signal.minutes_remaining, signal.suggested_price, signal.window_minutes
+        )
+        kelly_frac = self._kelly_fraction(signal.suggested_price, win_prob)
+        trade_size = balance * kelly_frac
+        trade_size = min(trade_size, max_size)
         trade_size = max(trade_size, self.config.min_trade_size)
+        logger.info(f"Kelly sizing: win_prob={win_prob:.1%}, kelly_frac={kelly_frac:.3f}, raw=${balance * kelly_frac:.2f}, capped=${trade_size:.2f}")
 
         if trade_size > balance:
             logger.warning(f"Insufficient balance: ${balance:.2f} < min ${self.config.min_trade_size}")
@@ -600,8 +1271,20 @@ class CryptoLatencyBot:
             return None
 
         # Re-fetch best ask right before ordering for freshest price
-        best_ask = self.polymarket.get_best_ask(signal.token_id)
-        order_price = best_ask if best_ask and best_ask <= self.config.max_entry_price else signal.suggested_price
+        # Try WebSocket cache first (<1ms), fall back to REST
+        if self.book_feed.connected and self.book_feed.is_fresh(signal.token_id):
+            best_ask = self.book_feed.get_best_ask(signal.token_id)
+        else:
+            best_ask = self.polymarket.get_best_ask(signal.token_id)
+        if best_ask and self.config.min_entry_price <= best_ask <= self.config.max_entry_price:
+            order_price = best_ask
+        elif best_ask:
+            logger.info(f"Order ABORT: best_ask=${best_ask:.4f} outside range ${self.config.min_entry_price}-${self.config.max_entry_price}")
+            return None
+        else:
+            # No book data — use signal price but log warning
+            order_price = signal.suggested_price
+            logger.warning(f"No order book data — using signal price ${order_price:.4f}")
         logger.info(f"Order pricing: best_ask=${best_ask}, suggested=${signal.suggested_price:.4f}, using=${order_price:.4f}")
 
         # Calculate shares and expected profit
@@ -643,11 +1326,14 @@ class CryptoLatencyBot:
             try:
                 end_dt = datetime.fromisoformat(signal.end_date.replace("Z", "+00:00"))
                 start_ts = int((end_dt - timedelta(minutes=signal.window_minutes)).timestamp())
-                trade.event_slug = f"{self.config.asset.lower()}-updown-{signal.window_minutes}m-{start_ts}"
+                trade.event_slug = f"{signal.asset}-updown-{signal.window_minutes}m-{start_ts}"
             except Exception:
                 trade.event_slug = None
             self.successful_trades += 1
+            self._last_trade_time = time.time()  # Start cooldown
             self.traded_markets.add(signal.market_id)
+            window_key = f"{signal.window_minutes}m_{signal.end_date}"
+            self.traded_windows.add(window_key)
             # Don't add profit yet — wait for resolution verification
             self.pending_resolutions.append(trade)
             logger.info(f"[DRY RUN] Trade queued for resolution verification (resolves at {signal.end_date})")
@@ -681,14 +1367,17 @@ class CryptoLatencyBot:
                     try:
                         end_dt = datetime.fromisoformat(signal.end_date.replace("Z", "+00:00"))
                         start_ts = int((end_dt - timedelta(minutes=signal.window_minutes)).timestamp())
-                        trade.event_slug = f"{self.config.asset.lower()}-updown-{signal.window_minutes}m-{start_ts}"
+                        trade.event_slug = f"{signal.asset}-updown-{signal.window_minutes}m-{start_ts}"
                     except Exception:
                         trade.event_slug = None
                     self.successful_trades += 1
                     self.position_count += 1
+                    self._last_trade_time = time.time()  # Start cooldown
                     self.traded_markets.add(signal.market_id)
+                    window_key = f"{signal.window_minutes}m_{signal.end_date}"
+                    self.traded_windows.add(window_key)
                     self.pending_resolutions.append(trade)
-                    logger.info(f"Order FILLED! Queued for resolution verification.")
+                    logger.info(f"Order FILLED! Queued for resolution verification. Cooldown {self.config.cooldown_after_trade_secs:.0f}s started.")
                 else:
                     # Cancel unfilled order
                     if order_id:
@@ -714,24 +1403,277 @@ class CryptoLatencyBot:
         if trade.status in ("FILLED", "DRY_RUN"):
             try:
                 self.telegram.send_message_sync(
-                    f"{'[DRY] ' if self.dry_run else ''}<b>LATENCY {trade.status} [{signal.window_minutes}m]</b>\n\n"
-                    f"{signal.question[:50]}\n"
-                    f"BUY {signal.side} @ ${order_price:.4f}\n"
-                    f"BTC: ${signal.btc_price:,.2f} ({signal.move_pct:+.3f}%)\n"
-                    f"Cost: ${trade_size:.2f} | Shares: {shares:.1f}\n"
-                    f"Payout if win: ${expected_payout:.2f} (+${expected_profit:.2f})\n"
-                    f"Time left: {signal.minutes_remaining:.1f} min\n"
+                    f"{'🧪 ' if self.dry_run else '🔴 '}<b>⚡ LATENCY {trade.status} [{signal.window_minutes}m]</b>\n\n"
+                    f"📊 {signal.question[:50]}\n"
+                    f"{'📈' if signal.side == 'Up' else '📉'} BUY {signal.side} @ ${order_price:.4f}\n"
+                    f"₿ BTC: ${signal.btc_price:,.2f} ({signal.move_pct:+.3f}%)\n"
+                    f"💰 Cost: ${trade_size:.2f} | Shares: {shares:.1f}\n"
+                    f"🎯 Payout if win: ${expected_payout:.2f} (+${expected_profit:.2f})\n"
+                    f"⏱️ Time left: {signal.minutes_remaining:.1f} min\n"
                 )
             except Exception as e:
                 logger.warning(f"Telegram alert failed: {e}")
 
         return trade
 
+    # ---- Streak (compounding) mode methods ----
+
+    def _streak_signal_qualifies(self, signal: TradeSignal) -> bool:
+        """Check if a signal qualifies for a streak trade (tighter filters)."""
+        if self.streak_state != "idle":
+            return False
+        if self.streak_balance < 1.0:
+            return False
+        if signal.suggested_price < self.streak_config.min_entry_price:
+            return False
+        if signal.suggested_price > self.streak_config.max_entry_price:
+            return False
+        # Tighter move thresholds per window
+        if signal.window_minutes <= 5:
+            if abs(signal.move_pct) < self.streak_config.min_move_pct_5m:
+                return False
+        else:
+            if abs(signal.move_pct) < self.streak_config.min_move_pct_15m:
+                return False
+        return True
+
+    async def _execute_streak_trade(self, signal: TradeSignal) -> Optional[LatencyTrade]:
+        """Execute a streak trade — ALL-IN with the current streak balance."""
+        trade_size = self.streak_balance
+
+        # Re-fetch best ask for freshest price
+        if self.book_feed.connected and self.book_feed.is_fresh(signal.token_id):
+            best_ask = self.book_feed.get_best_ask(signal.token_id)
+        else:
+            best_ask = self.polymarket.get_best_ask(signal.token_id)
+
+        if best_ask and self.streak_config.min_entry_price <= best_ask <= self.streak_config.max_entry_price:
+            order_price = best_ask
+        elif best_ask:
+            logger.info(f"[STREAK] ABORT: best_ask=${best_ask:.4f} outside range ${self.streak_config.min_entry_price}-${self.streak_config.max_entry_price}")
+            return None
+        else:
+            order_price = signal.suggested_price
+            logger.warning(f"[STREAK] No book data — using signal price ${order_price:.4f}")
+
+        shares = trade_size / order_price
+        expected_payout = shares
+        expected_profit = expected_payout - trade_size
+
+        trade = LatencyTrade(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            market_id=signal.market_id,
+            question=signal.question,
+            side=signal.side,
+            amount=trade_size,
+            entry_price=order_price,
+            expected_payout=expected_payout,
+            expected_profit=expected_profit,
+            btc_price=signal.btc_price,
+            btc_open_price=signal.btc_open_price,
+            move_pct=signal.move_pct,
+            minutes_remaining=signal.minutes_remaining,
+            status="PENDING",
+            is_streak=True,
+        )
+
+        logger.info(f"\n{'='*60}")
+        logger.info(f"🔥 STREAK TRADE #{self.streak_wins + 1}")
+        logger.info(f"Market: {signal.question[:60]}")
+        logger.info(f"Side: {signal.side} @ ${order_price:.4f}")
+        logger.info(f"ALL-IN: ${trade_size:.2f} -> {shares:.1f} shares -> ${expected_payout:.2f}")
+        logger.info(f"{'='*60}\n")
+
+        if self.dry_run:
+            trade.status = "DRY_RUN"
+            trade.end_date = signal.end_date
+            try:
+                end_dt = datetime.fromisoformat(signal.end_date.replace("Z", "+00:00"))
+                start_ts = int((end_dt - timedelta(minutes=signal.window_minutes)).timestamp())
+                trade.event_slug = f"{signal.asset}-updown-{signal.window_minutes}m-{start_ts}"
+            except Exception:
+                trade.event_slug = None
+            self.pending_resolutions.append(trade)
+        else:
+            try:
+                logger.warning(">>> PLACING LIVE STREAK ORDER <<<")
+                order_response = self.polymarket.execute_limit_buy(
+                    token_id=signal.token_id,
+                    price=order_price,
+                    size=round(shares, 2),
+                )
+                order_id = None
+                if isinstance(order_response, dict):
+                    order_id = order_response.get("orderID") or order_response.get("id")
+                elif isinstance(order_response, str):
+                    order_id = order_response
+                trade.order_id = str(order_id) if order_id else None
+
+                filled = await self._wait_for_fill(order_id, signal.token_id)
+                if filled:
+                    trade.status = "FILLED"
+                    trade.end_date = signal.end_date
+                    try:
+                        end_dt = datetime.fromisoformat(signal.end_date.replace("Z", "+00:00"))
+                        start_ts = int((end_dt - timedelta(minutes=signal.window_minutes)).timestamp())
+                        trade.event_slug = f"{signal.asset}-updown-{signal.window_minutes}m-{start_ts}"
+                    except Exception:
+                        trade.event_slug = None
+                    self.pending_resolutions.append(trade)
+                else:
+                    if order_id:
+                        try:
+                            self.polymarket.cancel_order(str(order_id))
+                        except Exception:
+                            pass
+                    trade.status = "TIMEOUT_CANCELLED"
+                    logger.info("[STREAK] Order timed out — streak stays idle")
+                    self._log_trade(trade)
+                    return None
+            except Exception as e:
+                logger.error(f"[STREAK] Trade execution failed: {e}")
+                trade.status = "FAILED"
+                self._log_trade(trade)
+                return None
+
+        # Mark streak as open
+        self.streak_state = "open"
+        self.streak_trade = trade
+        self._log_trade(trade)
+
+        # Telegram alert
+        try:
+            self.telegram.send_message_sync(
+                f"{'🧪 ' if self.dry_run else '🔴 '}<b>🔥 STREAK TRADE #{self.streak_wins + 1}</b>\n\n"
+                f"📊 {signal.question[:50]}\n"
+                f"{'📈' if signal.side == 'Up' else '📉'} BUY {signal.side} @ ${order_price:.4f}\n"
+                f"💰 ALL-IN: ${trade_size:.2f} | Shares: {shares:.1f}\n"
+                f"🎯 Payout if win: ${expected_payout:.2f}\n"
+                f"📈 Streak balance: ${self.streak_balance:.2f} -> ${expected_payout:.2f}\n"
+                f"🏁 Target: ${self.streak_config.profit_target:.0f}\n"
+            )
+        except Exception:
+            pass
+
+        return trade
+
+    async def _check_streak_resolution(self):
+        """Check if the active streak trade has resolved and handle outcome."""
+        if self.streak_state != "open" or self.streak_trade is None:
+            return
+
+        trade = self.streak_trade
+        if trade.resolution_status == "pending":
+            return  # Not yet resolved by check_resolutions()
+
+        if trade.resolution_status == "win":
+            payout = trade.expected_payout
+            self.streak_balance = payout
+            self.streak_wins += 1
+            self.streak_trade = None
+
+            logger.info(f"[STREAK] WIN #{self.streak_wins}! Balance: ${payout:.2f}")
+
+            # Auto-redeem resolved positions (returns USDC to wallet)
+            if not self.dry_run:
+                logger.info("[STREAK] Auto-redeeming resolved positions...")
+                try:
+                    self.polymarket.redeem_positions()
+                    logger.info("[STREAK] Redemption submitted, waiting 15s for on-chain confirmation...")
+                    await asyncio.sleep(15)
+                except Exception as e:
+                    logger.warning(f"[STREAK] Redemption failed (will retry next cycle): {e}")
+
+            # Check if we hit the profit target (0 = no limit)
+            if self.streak_config.profit_target > 0 and self.streak_balance >= self.streak_config.profit_target:
+                self.streak_state = "done"
+                logger.info(f"[STREAK] TARGET HIT! ${self.streak_balance:.2f} >= ${self.streak_config.profit_target:.0f}")
+                try:
+                    self.telegram.send_message_sync(
+                        f"🏆 <b>STREAK TARGET HIT!</b>\n\n"
+                        f"💰 Final balance: ${self.streak_balance:.2f}\n"
+                        f"🔥 Wins: {self.streak_wins}\n"
+                        f"📈 Started: ${self.streak_config.starting_amount:.0f} -> ${self.streak_balance:.2f}\n"
+                        f"🎯 Target was: ${self.streak_config.profit_target:.0f}\n"
+                    )
+                except Exception:
+                    pass
+            else:
+                self.streak_state = "idle"
+                logger.info(f"[STREAK] Ready for next trade. Balance: ${self.streak_balance:.2f}")
+                try:
+                    target_str = f"🎯 Target: ${self.streak_config.profit_target:.0f} ({self.streak_balance/self.streak_config.profit_target*100:.0f}%)\n" if self.streak_config.profit_target > 0 else ""
+                    self.telegram.send_message_sync(
+                        f"✅ <b>STREAK WIN #{self.streak_wins}</b>\n\n"
+                        f"💰 Balance: ${self.streak_balance:.2f}\n"
+                        f"{target_str}"
+                        f"⏳ Waiting for next high-conviction signal...\n"
+                    )
+                except Exception:
+                    pass
+
+        elif trade.resolution_status == "loss":
+            self.streak_balance = 0.0
+            self.streak_state = "done"
+            self.streak_trade = None
+            logger.info(f"[STREAK] LOSS — streak over after {self.streak_wins} wins.")
+            try:
+                self.telegram.send_message_sync(
+                    f"💀 <b>STREAK OVER — LOSS</b>\n\n"
+                    f"📊 {trade.question[:50]}\n"
+                    f"🔥 Wins before loss: {self.streak_wins}\n"
+                    f"💸 Lost: ${trade.amount:.2f}\n"
+                )
+            except Exception:
+                pass
+
+        elif trade.resolution_status == "unknown":
+            # 30-min timeout — end streak conservatively
+            self.streak_state = "done"
+            self.streak_trade = None
+            logger.warning(f"[STREAK] Resolution unknown after 30min — ending streak conservatively")
+            try:
+                self.telegram.send_message_sync(
+                    f"⚠️ <b>STREAK ENDED — UNKNOWN RESOLUTION</b>\n\n"
+                    f"📊 {trade.question[:50]}\n"
+                    f"🔥 Wins: {self.streak_wins}\n"
+                    f"💰 Last known balance: ${self.streak_balance:.2f}\n"
+                )
+            except Exception:
+                pass
+
     async def _wait_for_fill(self, order_id: Optional[str], token_id: str) -> bool:
-        """Wait for a limit order to fill, up to order_timeout seconds."""
+        """Wait for a limit order to fill, up to order_timeout seconds.
+
+        Uses WebSocket push notifications if available (near-instant),
+        falls back to REST polling (1s intervals).
+        """
         if not order_id:
             return False
 
+        # Try WebSocket fill detection first (near-instant)
+        if self.order_feed and self.order_feed.connected:
+            logger.info(f"Waiting for fill via WebSocket (timeout={self.config.order_timeout}s)...")
+            filled = await self.order_feed.wait_for_fill(str(order_id), self.config.order_timeout)
+            if filled:
+                logger.info(f"Fill detected via WebSocket!")
+                return True
+            # Timeout — do a final REST check in case WS missed it
+            try:
+                order = self.polymarket.get_order(str(order_id))
+                status = ""
+                if isinstance(order, dict):
+                    status = order.get("status", "").lower()
+                elif isinstance(order, str):
+                    status = order.lower()
+                if "matched" in status or "filled" in status:
+                    logger.info(f"Fill confirmed via REST fallback after WS timeout")
+                    return True
+            except Exception:
+                pass
+            return False
+
+        # REST fallback (existing logic)
         start = time.time()
         while (time.time() - start) < self.config.order_timeout:
             try:
@@ -800,6 +1742,8 @@ class CryptoLatencyBot:
                 else:
                     logger.warning(f"Could not verify resolution after 30 min for {trade.question[:50]}")
                     trade.resolution_status = "unknown"
+                    if not self.dry_run and not trade.is_streak:
+                        self.position_count = max(0, self.position_count - 1)
                 continue
 
             trade.resolved_side = resolved_side
@@ -808,6 +1752,24 @@ class CryptoLatencyBot:
             if won:
                 trade.resolution_status = "win"
                 trade.actual_profit = trade.expected_profit
+            else:
+                trade.resolution_status = "loss"
+                trade.actual_profit = -trade.amount  # Lost the entire bet
+
+            # Streak trades are handled by _check_streak_resolution — skip regular bot stats
+            if trade.is_streak:
+                logger.info(
+                    f"[STREAK] RESOLVED {'WIN' if won else 'LOSS'}: {trade.question[:50]} | "
+                    f"Bet {trade.side}, resolved {resolved_side}"
+                )
+                self._log_trade(trade)
+                continue
+
+            # Regular bot stats and notifications
+            if not self.dry_run:
+                self.position_count = max(0, self.position_count - 1)
+
+            if won:
                 self.verified_wins += 1
                 self.verified_pnl += trade.actual_profit
                 if self.simulated_balance is not None:
@@ -818,8 +1780,6 @@ class CryptoLatencyBot:
                     f"Profit: +${trade.actual_profit:.2f}"
                 )
             else:
-                trade.resolution_status = "loss"
-                trade.actual_profit = -trade.amount  # Lost the entire bet
                 self.verified_losses += 1
                 self.verified_pnl += trade.actual_profit
                 if self.simulated_balance is not None:
@@ -839,13 +1799,13 @@ class CryptoLatencyBot:
             current_balance = self.get_balance()
             try:
                 self.telegram.send_message_sync(
-                    f"{'[DRY] ' if self.dry_run else ''}<b>RESOLUTION {'WIN' if won else 'LOSS'}</b>\n\n"
-                    f"{trade.question[:50]}\n"
-                    f"Bet: {trade.side} | Result: {resolved_side}\n"
-                    f"This trade: ${trade.actual_profit:+.2f}\n\n"
-                    f"Record: {self.verified_wins}W/{self.verified_losses}L ({win_rate:.0f}%)\n"
-                    f"Session P&L: ${self.verified_pnl:+.2f}\n"
-                    f"Balance: ${current_balance:.2f}\n"
+                    f"{'🧪 ' if self.dry_run else ''}{'✅' if won else '❌'} <b>RESOLUTION {'WIN 🎉' if won else 'LOSS'}</b>\n\n"
+                    f"📊 {trade.question[:50]}\n"
+                    f"🎲 Bet: {trade.side} | Result: {resolved_side}\n"
+                    f"{'💵' if won else '💸'} This trade: ${trade.actual_profit:+.2f}\n\n"
+                    f"📋 Record: {self.verified_wins}W/{self.verified_losses}L ({win_rate:.0f}%)\n"
+                    f"💰 Session P&L: ${self.verified_pnl:+.2f}\n"
+                    f"🏦 Balance: ${current_balance:.2f}\n"
                 )
             except Exception:
                 pass
@@ -901,13 +1861,14 @@ class CryptoLatencyBot:
     def print_status(self):
         """Print current status."""
         balance = self.get_balance()
-        btc_data = self.price_feed.get_price()
-        btc_str = f"${btc_data[0]:,.2f}" if btc_data else "N/A"
 
         logger.info(f"\n{'='*50}")
         logger.info("CRYPTO LATENCY BOT STATUS")
         logger.info(f"{'='*50}")
-        logger.info(f"BTC Price: {btc_str}")
+        for asset, feed in self.price_feeds.items():
+            data = feed.get_price()
+            price_str = f"${data[0]:,.2f}" if data else "N/A"
+            logger.info(f"{asset.upper()}: {price_str}")
         logger.info(f"Balance: ${balance:.2f}")
         if self.initial_balance:
             pnl = balance - self.initial_balance
@@ -925,27 +1886,116 @@ class CryptoLatencyBot:
             logger.info(f"Verified P&L: ${self.verified_pnl:+.2f}")
             logger.info(f"Awaiting resolution: {pending}")
 
+        # Streak mode status
+        if self.streak_config.enabled:
+            logger.info(f"--- Streak Mode ---")
+            logger.info(f"State: {self.streak_state} | Balance: ${self.streak_balance:.2f} | Wins: {self.streak_wins}")
+            if self.streak_config.profit_target > 0:
+                logger.info(f"Target: ${self.streak_config.profit_target:.0f} ({self.streak_balance/self.streak_config.profit_target*100:.0f}%)")
+            else:
+                logger.info(f"Target: unlimited")
+
         logger.info(f"Mode: {'DRY RUN' if self.dry_run else 'LIVE'}")
         logger.info(f"{'='*50}\n")
 
+    async def _cache_refresh_loop(self):
+        """
+        Background task: refresh market cache from Gamma API every 45s.
+
+        This is the COLD PATH. It runs in a thread to avoid blocking
+        the fast-path event loop. Market data (token IDs, endDates, etc.)
+        is cached so the hot path never touches the Gamma API.
+        """
+        CACHE_INTERVAL = 45
+
+        while True:
+            try:
+                new_markets = await asyncio.to_thread(self.find_active_markets)
+                self._cached_markets = new_markets
+
+                # Sync book feed subscriptions with new market set
+                if self.book_feed.connected:
+                    new_tokens = set()
+                    for m in new_markets:
+                        clob_ids = m.get("clobTokenIds", "[]")
+                        if isinstance(clob_ids, str):
+                            clob_ids = json.loads(clob_ids)
+                        new_tokens.update(clob_ids)
+                    to_unsub = self._subscribed_book_tokens - new_tokens
+                    to_sub = new_tokens - self._subscribed_book_tokens
+                    if to_unsub:
+                        await self.book_feed.unsubscribe(list(to_unsub))
+                    if to_sub:
+                        await self.book_feed.subscribe(list(to_sub))
+                    if to_sub or to_unsub:
+                        logger.info(f"Book feed sync: +{len(to_sub)} -{len(to_unsub)} tokens (total: {len(new_tokens)})")
+                    self._subscribed_book_tokens = new_tokens
+
+                # Log cache contents
+                windows_str = "/".join(f"{w}m" for w in self.config.market_windows)
+                logger.info(f"\n--- Market Cache Refresh ---")
+                for asset, feed in self.price_feeds.items():
+                    data = feed.get_price()
+                    logger.info(f"{asset.upper()}: ${data[0]:,.2f}" if data else f"{asset.upper()}: N/A")
+                logger.info(f"Cached {len(new_markets)} active {windows_str} markets")
+
+                for market in new_markets:
+                    q = market.get("question", "")[:50]
+                    wm = market.get("_window_minutes", 15)
+                    asset = market.get("_asset", "btc")
+                    feed = self.price_feeds.get(asset)
+                    end_str = market.get("endDate", "")
+                    try:
+                        end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+                        mins_left = (end_dt - datetime.now(timezone.utc)).total_seconds() / 60.0
+                    except Exception:
+                        mins_left = -1
+                    price_open = self.get_candle_open_price(market)
+                    price_data = feed.get_price() if feed else None
+                    if price_data and price_open:
+                        mv = ((price_data[0] - price_open) / price_open) * 100
+                        req = self._get_required_move_pct(mins_left, wm)
+                        logger.info(f"  [{asset.upper()} {wm}m] {q} | {mins_left:.1f}min | move {mv:+.3f}% (need {req:.2f}%)")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Cache refresh error: {e}")
+
+            await asyncio.sleep(CACHE_INTERVAL)
+
     async def run(self, scan_interval: Optional[float] = None, max_iterations: Optional[int] = None):
         """
-        Main async event loop.
+        Main async event loop — FAST PATH architecture.
 
-        1. Start Binance WebSocket
-        2. Poll Gamma for 15-min markets every scan_interval seconds
-        3. Evaluate each market for latency opportunity
-        4. Execute trades when signals appear
+        Cold path (background, every 45s):
+            Refresh market cache from Gamma API in a thread.
+
+        Hot path (every 1s):
+            1. Read BTC price from WebSocket (in-memory, instant)
+            2. For each cached market in our time window:
+               - Check BTC move vs threshold (local math)
+               - Check 30s momentum (local array scan)
+               - If all pass → single CLOB book API call → trade
+            3. Target: <2 seconds from BTC move to order placement
+
+        The old approach polled 16 markets from Gamma every 15s (~12s of API calls),
+        giving market makers 13+ seconds to reprice. This design eliminates that delay.
         """
         interval = scan_interval or self.config.scan_interval
 
         logger.info(f"\n{'='*60}")
-        logger.info("STARTING CRYPTO LATENCY BOT")
+        logger.info("STARTING CRYPTO LATENCY BOT (FAST PATH)")
         windows_str = "/".join(f"{w}m" for w in self.config.market_windows)
-        logger.info(f"Asset: {self.config.asset.upper()} | Windows: {windows_str}")
-        logger.info(f"Scan interval: {interval}s")
+        assets_str = "/".join(a.upper() for a in self.config.assets)
+        logger.info(f"Assets: {assets_str} | Windows: {windows_str}")
+        logger.info(f"Fast-tick interval: {interval}s")
         logger.info(f"Mode: {'DRY RUN' if self.dry_run else 'LIVE TRADING'}")
-        logger.info(f"Entry threshold: BTC move > {self.config.min_price_move_pct}%, Polymarket < ${self.config.max_entry_price}")
+        logger.info(f"Entry threshold: move > {self.config.min_price_move_pct}%, Polymarket ${self.config.min_entry_price}-${self.config.max_entry_price}")
+        logger.info(f"EV filter: min EV/$ = {self.config.min_ev_per_dollar} | Kelly sizing: 0.25x fractional | Trend filter: ENABLED")
+        if self.streak_config.enabled:
+            logger.info(f"STREAK MODE: ${self.streak_config.starting_amount:.0f} -> ${self.streak_config.profit_target:.0f} target")
+            logger.info(f"  Entry range: ${self.streak_config.min_entry_price}-${self.streak_config.max_entry_price}, Min move 5m: {self.streak_config.min_move_pct_5m}%, 15m: {self.streak_config.min_move_pct_15m}%")
         logger.info(f"{'='*60}\n")
 
         if not self.dry_run:
@@ -954,8 +2004,14 @@ class CryptoLatencyBot:
             logger.warning("=" * 60)
             await asyncio.sleep(5)
 
-        # Initialize balance
-        balance = self.get_balance()
+        # Initialize balance (retry up to 5 times for RPC rate limits)
+        balance = 0.0
+        for attempt in range(5):
+            balance = self.get_balance()
+            if balance > 0:
+                break
+            logger.warning(f"Balance check returned $0 (attempt {attempt+1}/5), retrying in 15s...")
+            await asyncio.sleep(15)
         self.initial_balance = balance
         logger.info(f"Starting balance: ${balance:.2f}")
 
@@ -963,106 +2019,227 @@ class CryptoLatencyBot:
             logger.error(f"Balance ${balance:.2f} below min trade size ${self.config.min_trade_size}")
             return
 
-        # Start Binance price feed
-        logger.info("Connecting to Binance WebSocket...")
-        await self.price_feed.start()
+        # Start Binance price feeds for all assets
+        logger.info(f"Connecting to Binance WebSockets for {len(self.price_feeds)} assets...")
+        for asset, feed in self.price_feeds.items():
+            logger.info(f"  Starting {asset.upper()} feed...")
+            await feed.start()
 
-        if not self.price_feed.connected:
-            logger.error("Failed to connect to Binance. Exiting.")
+        connected = [a for a, f in self.price_feeds.items() if f.connected]
+        if not connected:
+            logger.error("No Binance feeds connected. Exiting.")
             return
+        logger.info(f"Connected feeds: {', '.join(a.upper() for a in connected)}")
+
+        # Start Polymarket book feed (WebSocket for order book prices)
+        logger.info("Connecting to Polymarket book WebSocket...")
+        await self.book_feed.start()
+        if self.book_feed.connected:
+            logger.info("Polymarket book feed: connected")
+        else:
+            logger.warning("Polymarket book feed: not connected (will use REST fallback)")
+
+        # Start Polymarket order feed for live mode (fill detection)
+        if self.order_feed and not self.dry_run:
+            api_key = os.environ.get("POLYMARKET_API_KEY", "")
+            api_secret = os.environ.get("POLYMARKET_SECRET", "")
+            api_passphrase = os.environ.get("POLYMARKET_PASSPHRASE", "")
+            if api_key and api_secret and api_passphrase:
+                logger.info("Connecting to Polymarket order WebSocket...")
+                await self.order_feed.start(
+                    credentials={"apiKey": api_key, "secret": api_secret, "passphrase": api_passphrase},
+                )
+                if self.order_feed.connected:
+                    logger.info("Polymarket order feed: connected (instant fill detection)")
+                else:
+                    logger.warning("Polymarket order feed: not connected (will use REST polling)")
+            else:
+                logger.warning("Polymarket order feed: missing API credentials, skipping")
+                self.order_feed = None
+
+        # Start background market cache refresh
+        self._cached_markets = []
+        cache_task = asyncio.create_task(self._cache_refresh_loop())
+
+        # Wait for initial cache population (up to 90s — 4 assets × 16 slugs can take ~45s)
+        logger.info("Loading market cache...")
+        for _ in range(90):
+            if self._cached_markets:
+                break
+            await asyncio.sleep(1)
+
+        if not self._cached_markets:
+            logger.error("Failed to load market cache. Exiting.")
+            cache_task.cancel()
+            await self.book_feed.stop()
+            if self.order_feed:
+                await self.order_feed.stop()
+            for feed in self.price_feeds.values():
+                await feed.stop()
+            return
+
+        # Subscribe book feed to all token IDs from initial cache
+        if self.book_feed.connected:
+            initial_tokens = set()
+            for m in self._cached_markets:
+                clob_ids = m.get("clobTokenIds", "[]")
+                if isinstance(clob_ids, str):
+                    clob_ids = json.loads(clob_ids)
+                initial_tokens.update(clob_ids)
+            if initial_tokens:
+                await self.book_feed.subscribe(list(initial_tokens))
+                self._subscribed_book_tokens = initial_tokens
+                logger.info(f"Book feed: subscribed to {len(initial_tokens)} tokens from initial cache")
 
         # Send Telegram startup
         try:
+            streak_msg = ""
+            if self.streak_config.enabled:
+                streak_msg = (
+                    f"\n🔥 <b>STREAK MODE ON</b>\n"
+                    f"💰 Starting: ${self.streak_config.starting_amount:.0f}\n"
+                    f"🎯 Target: ${self.streak_config.profit_target:.0f}\n"
+                )
             self.telegram.send_message_sync(
-                f"<b>CRYPTO LATENCY BOT STARTED</b>\n\n"
-                f"Mode: {'DRY RUN' if self.dry_run else 'LIVE'}\n"
-                f"Asset: {self.config.asset.upper()}\n"
-                f"Balance: ${balance:.2f}\n"
-                f"Scan interval: {interval}s\n"
+                f"🚀 <b>CRYPTO LATENCY BOT STARTED</b>\n\n"
+                f"⚙️ Mode: {'🧪 DRY RUN' if self.dry_run else '🔴 LIVE'}\n"
+                f"📊 Assets: {assets_str}\n"
+                f"🏦 Balance: ${balance:.2f}\n"
+                f"⚡ Fast-path: {interval}s tick\n"
+                f"{streak_msg}"
             )
         except Exception:
             pass
 
         iteration = 0
+        last_status_time = time.time()
+        last_redeem_time = time.time()
+        STATUS_INTERVAL = 30  # Print status every 30s
+        REDEEM_INTERVAL = 900  # Redeem resolved positions every 15 min
 
         try:
             while max_iterations is None or iteration < max_iterations:
                 iteration += 1
-                logger.info(f"\n--- Scan {iteration} ---")
+                now_ts = time.time()
 
-                # Check Binance connection
-                if not self.price_feed.connected:
-                    logger.warning("Binance disconnected, waiting for reconnect...")
+                # Check at least one feed is connected
+                any_connected = any(f.connected for f in self.price_feeds.values())
+                if not any_connected:
+                    logger.warning("All Binance feeds disconnected, waiting for reconnect...")
                     await asyncio.sleep(5)
                     continue
 
-                btc_data = self.price_feed.get_price()
-                if btc_data:
-                    logger.info(f"BTC: ${btc_data[0]:,.2f}")
+                # --- HOT PATH: fast evaluation of cached markets ---
+                for market in self._cached_markets:
+                    market_id = str(market.get("id", ""))
+                    if market_id in self.traded_markets:
+                        continue
+                    if self.risk_manager.is_market_on_cooldown(market_id):
+                        continue
 
-                # Find active markets across all configured timeframes
-                markets = self.find_active_markets()
-                windows_str = "/".join(f"{w}m" for w in self.config.market_windows)
-                logger.info(f"Found {len(markets)} active {windows_str} {self.config.asset.upper()} markets")
+                    # Get the right price feed for this market's asset
+                    asset = market.get("_asset", "btc")
+                    feed = self.price_feeds.get(asset)
+                    if not feed or not feed.connected:
+                        continue
+                    price_data = feed.get_price()
+                    if not price_data:
+                        continue
+                    price_now = price_data[0]
 
-                # Evaluate each market
-                signals = []
-                for market in markets:
-                    q = market.get("question", "")[:50]
-                    wm = market.get("_window_minutes", 15)
+                    # Time window check (local math)
                     end_str = market.get("endDate", "")
+                    if not end_str:
+                        continue
                     try:
                         end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
                         mins_left = (end_dt - datetime.now(timezone.utc)).total_seconds() / 60.0
                     except Exception:
-                        mins_left = -1
-                    btc_open = self.get_candle_open_price(market)
-                    if btc_data and btc_open:
-                        mv = ((btc_data[0] - btc_open) / btc_open) * 100
-                        req = self._get_required_move_pct(mins_left, wm)
-                        logger.info(f"  [{wm}m] {q} | {mins_left:.1f}min | move {mv:+.3f}% (need {req:.2f}%)")
+                        continue
+
+                    if mins_left < self.config.min_minutes_remaining:
+                        continue
+                    if mins_left > self.config.max_minutes_remaining:
+                        continue
+
+                    # Asset move check (local math)
+                    price_open = self.get_candle_open_price(market)
+                    if not price_open or price_open <= 0:
+                        continue
+                    move_pct = ((price_now - price_open) / price_open) * 100.0
+                    wm = market.get("_window_minutes", 15)
+                    required = self._get_required_move_pct(mins_left, wm)
+                    if abs(move_pct) < required:
+                        continue
+
+                    winning_side = "Up" if move_pct > 0 else "Down"
+
+                    # Momentum check (local array scan)
+                    if not self._check_momentum(winning_side, asset):
+                        continue
+
+                    # ALL LOCAL CHECKS PASSED — book check (WS cache <1ms or REST fallback)
+                    q = market.get("question", "")[:50]
+                    logger.info(f">>> SIGNAL [{wm}m] {q} | {winning_side} {move_pct:+.3f}% | {mins_left:.1f}min — checking book...")
+
                     signal = self.evaluate_opportunity(market)
                     if signal:
-                        signals.append(signal)
+                        # Regular bot always executes (unchanged behavior)
+                        logger.info(f">>> BOOK OK @ ${signal.suggested_price:.4f} — EXECUTING!")
+                        await self.execute_trade(signal)
+                        # Streak bot also executes independently if it qualifies
+                        if self.streak_config.enabled and self._streak_signal_qualifies(signal):
+                            logger.info(f">>> STREAK also trading this signal!")
+                            await self._execute_streak_trade(signal)
+                        break
 
-                if signals:
-                    # Sort by move strength (strongest signal first)
-                    signals.sort(key=lambda s: abs(s.move_pct), reverse=True)
-                    logger.info(f"Found {len(signals)} trade signals!")
-                    for sig in signals:
-                        logger.info(f"  {sig.side} @ ${sig.suggested_price:.4f} | BTC {sig.move_pct:+.3f}% | {sig.minutes_remaining:.1f}min left")
+                # Periodic status + resolution checks
+                if now_ts - last_status_time >= STATUS_INTERVAL:
+                    await self.check_resolutions()
+                    if self.streak_config.enabled:
+                        await self._check_streak_resolution()
+                    self.print_status()
+                    last_status_time = now_ts
 
-                    # Execute best signal
-                    best = signals[0]
-                    await self.execute_trade(best)
-                else:
-                    logger.info("No trade signals this scan")
+                # Periodic redemption sweep (catches orphaned positions from restarts)
+                if not self.dry_run and now_ts - last_redeem_time >= REDEEM_INTERVAL:
+                    try:
+                        results = await asyncio.to_thread(self.polymarket.redeem_positions)
+                        if results:
+                            logger.info(f"[REDEEM SWEEP] Redeemed {len(results)} positions")
+                            for r in results:
+                                logger.info(f"  {r.get('title', '?')[:50]} | success={r.get('success')}")
+                    except Exception as e:
+                        logger.warning(f"[REDEEM SWEEP] Failed: {e}")
+                    last_redeem_time = now_ts
 
-                # Check if any previous trades have resolved
-                await self.check_resolutions()
-
-                self.print_status()
-
-                # Wait for next scan
-                if max_iterations is None or iteration < max_iterations:
-                    logger.info(f"Next scan in {interval}s...")
-                    await asyncio.sleep(interval)
+                await asyncio.sleep(interval)
 
         except KeyboardInterrupt:
             logger.info("\nBot stopped by user")
         except Exception as e:
             logger.error(f"Error in main loop: {e}", exc_info=True)
         finally:
-            await self.price_feed.stop()
+            cache_task.cancel()
+            try:
+                await cache_task
+            except asyncio.CancelledError:
+                pass
+            # Stop all WebSocket feeds
+            await self.book_feed.stop()
+            if self.order_feed:
+                await self.order_feed.stop()
+            for feed in self.price_feeds.values():
+                await feed.stop()
             self.print_status()
 
             # Send shutdown message
             try:
                 self.telegram.send_message_sync(
-                    f"<b>CRYPTO LATENCY BOT STOPPED</b>\n\n"
-                    f"Trades: {self.total_trades}\n"
-                    f"Fills: {self.successful_trades}\n"
-                    f"Balance: ${self.get_balance():.2f}\n"
+                    f"🛑 <b>CRYPTO LATENCY BOT STOPPED</b>\n\n"
+                    f"📋 Trades: {self.total_trades}\n"
+                    f"✅ Fills: {self.successful_trades}\n"
+                    f"🏦 Balance: ${self.get_balance():.2f}\n"
                 )
             except Exception:
                 pass
@@ -1076,30 +2253,52 @@ def main():
                         help='Run in dry-run mode (no real trades)')
     parser.add_argument('--live', action='store_true',
                         help='Run in live mode (REAL TRADES)')
-    parser.add_argument('--scan-interval', type=float, default=30,
-                        help='Seconds between scans (default: 30)')
+    parser.add_argument('--scan-interval', type=float, default=1,
+                        help='Seconds between fast-path ticks (default: 1)')
     parser.add_argument('--max-iterations', type=int, default=None,
                         help='Maximum scan iterations')
     parser.add_argument('--simulated-balance', type=float, default=None,
                         help='Simulated balance for dry-run testing')
     parser.add_argument('--min-move', type=float, default=None,
-                        help='Min BTC move %% to trigger trade (default: 0.15)')
+                        help='Min BTC move %% to trigger trade (default: 0.30)')
+    parser.add_argument('--min-entry', type=float, default=None,
+                        help='Min Polymarket entry price (default: 0.70)')
     parser.add_argument('--max-entry', type=float, default=None,
-                        help='Max Polymarket entry price (default: 0.65)')
-    parser.add_argument('--asset', type=str, default='btc',
-                        help='Crypto asset to trade (btc, eth, sol)')
+                        help='Max Polymarket entry price (default: 0.85)')
+    parser.add_argument('--assets', type=str, default='btc',
+                        help='Crypto assets to trade, comma-separated (e.g., "btc,eth,sol,xrp")')
     parser.add_argument('--windows', type=str, default=None,
                         help='Market timeframes in minutes, comma-separated (e.g., "5,15")')
+    parser.add_argument('--max-trade-size', type=float, default=None,
+                        help='Max trade size in USDC for 5m windows (default: 10)')
+    parser.add_argument('--max-trade-size-15m', type=float, default=None,
+                        help='Max trade size for 15m windows (default: same as --max-trade-size)')
+    parser.add_argument('--max-positions', type=int, default=None,
+                        help='Max concurrent positions (default: 5)')
+    parser.add_argument('--streak', action='store_true',
+                        help='Enable streak (compounding) mode')
+    parser.add_argument('--streak-amount', type=float, default=20.0,
+                        help='Streak starting amount in USDC (default: 20)')
+    parser.add_argument('--streak-target', type=float, default=200.0,
+                        help='Streak profit target in USDC (default: 200)')
 
     args = parser.parse_args()
 
     config_kwargs = {}
     if args.min_move is not None:
         config_kwargs['min_price_move_pct'] = args.min_move
+    if args.min_entry is not None:
+        config_kwargs['min_entry_price'] = args.min_entry
     if args.max_entry is not None:
         config_kwargs['max_entry_price'] = args.max_entry
-    if args.asset:
-        config_kwargs['asset'] = args.asset
+    if args.max_trade_size is not None:
+        config_kwargs['max_trade_size'] = args.max_trade_size
+    if args.max_trade_size_15m is not None:
+        config_kwargs['max_trade_size_15m'] = args.max_trade_size_15m
+    if args.max_positions is not None:
+        config_kwargs['max_concurrent_positions'] = args.max_positions
+    if args.assets:
+        config_kwargs['assets'] = [a.strip().lower() for a in args.assets.split(',')]
     if args.windows:
         config_kwargs['market_windows'] = [int(w.strip()) for w in args.windows.split(',')]
 
@@ -1107,11 +2306,18 @@ def main():
     risk_config = RiskConfig()
     dry_run = not args.live
 
+    streak_config = StreakConfig(
+        enabled=args.streak,
+        starting_amount=args.streak_amount,
+        profit_target=args.streak_target,
+    )
+
     bot = CryptoLatencyBot(
         config=config,
         risk_config=risk_config,
         dry_run=dry_run,
         simulated_balance=args.simulated_balance,
+        streak_config=streak_config,
     )
 
     asyncio.run(bot.run(

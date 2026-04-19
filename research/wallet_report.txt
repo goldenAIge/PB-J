@@ -1,0 +1,1186 @@
+========================================================================
+Wallet: FelixFelicisEnjoyer
+Address: 0x0b995ff0078ba4f8849b99adfc93d74667498bdd
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 3500
+Warning: Activity capped at API max offset (3000); older trades are not available via offset pagination.
+Total TRADE events (activity): 3472
+Open position rows (/positions): 0
+Closed positions (/closed-positions): 1024
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $29,814.24
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $0.00
+  Combined (realized from history + current book): $29,814.24
+  Cross-check: GET /value (position value, not P/L): $0.00
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 839 | Losses (< 0): 181 | Flat (0): 4
+  Win rate (wins / wins+losses, excludes flat): 82.3%
+  Win rate (wins / wins + material losses only, loss <= -$50): 97.0%
+     Material losses: 26 | Small losses (scratch, > -$50): 155
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $79.47
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 0
+Average initial notional per open position (initialValue, USDC): $0.00
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $34,604.69
+  Gross losses (sum of negative): $-4,790.45
+  Best closed position: $817.27
+  Worst closed position: $-403.65
+
+--- Category: trade counts (TRADE events) ---
+  sports: 3468 trades
+  crypto: 2 trades
+  culture: 2 trades
+
+--- Category: settled positions (/closed-positions) ---
+  sports: positions=1022 | wins=837 losses=181 | win rate 82.2%
+  culture: positions=1 | wins=1 losses=0 | win rate 100.0%
+  crypto: positions=1 | wins=1 losses=0 | win rate 100.0%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 99
+Average days before resolution at first BUY: 0.0 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  (none — no open positions in API snapshot)
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-28 17:39 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $817.27 — Dota 2: Team Spirit vs Xtreme Gaming (BO3) - ESL One Birmingham Playof
+      slug=dota2-ts8-xtreme-2026-03-27 | outcome=Xtreme Gaming
+  2. $762.80 — Dota 2: Team Falcons vs Team Liquid (BO1) - BLAST Slam Group Stage
+      slug=dota2-flc-liquid-2026-02-04 | outcome=Team Liquid
+  3. $579.60 — Dota 2: Team Falcons vs Natus Vincere - Game 1 Winner
+      slug=dota2-flc-navi-2026-01-18 | outcome=Team Falcons
+  4. $503.60 — Dota 2: Xtreme Gaming vs Team Falcons - Game 1 Winner
+      slug=dota2-xtreme-flc-2026-02-27 | outcome=Team Falcons
+  5. $470.50 — Dota 2: Tundra Esports vs Yakult Brothers - Game 2 Winner
+      slug=dota2-tundra-yb1-2026-03-24 | outcome=Yakult Brothers
+
+========================================================================
+
+========================================================================
+Wallet: 0x87a146017E168286E1850c84Bf2d054b2227B6Ba-1770129622472
+Address: 0x87a146017e168286e1850c84bf2d054b2227b6ba
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 196
+Total TRADE events (activity): 148
+Open position rows (/positions): 24
+Closed positions (/closed-positions): 48
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $256,582.32
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $-204,923.65
+  Combined (realized from history + current book): $51,658.67
+  Cross-check: GET /value (position value, not P/L): $11,318.63
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 46 | Losses (< 0): 2 | Flat (0): 0
+  Win rate (wins / wins+losses, excludes flat): 95.8%
+  Win rate (wins / wins + material losses only, loss <= -$50): 95.8%
+     Material losses: 2 | Small losses (scratch, > -$50): 0
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $6,123.48
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 24
+Average initial notional per open position (initialValue, USDC): $9,010.10
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $271,582.31
+  Gross losses (sum of negative): $-14,999.99
+  Best closed position: $16,002.90
+  Worst closed position: $-10,000.00
+
+--- Category: trade counts (TRADE events) ---
+  sports: 145 trades
+  politics: 2 trades
+  crypto: 1 trades
+
+--- Category: settled positions (/closed-positions) ---
+  sports: positions=48 | wins=46 losses=2 | win rate 95.8%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 5
+Average days before resolution at first BUY: 199.2 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  1. Chelsea FC vs. Paris Saint-Germain FC: Both Teams to Score
+      outcome=Yes | entry (avgPrice)=0.6800 | curPrice=0.0000 | size (shares)=4,000.0000
+      initialValue=$2,720.00 | currentValue=$0.00 | slug=ucl-cfc1-psg1-2026-03-17-more-markets
+  2. RKS Raków Częstochowa vs. ACF Fiorentina: O/U 2.5
+      outcome=Under | entry (avgPrice)=0.5192 | curPrice=0.0000 | size (shares)=5,778.4980
+      initialValue=$2,999.99 | currentValue=$0.00 | slug=col-rak-fio-2026-03-19-more-markets
+  3. Will ACF Fiorentina win on 2026-02-07?
+      outcome=Yes | entry (avgPrice)=0.5500 | curPrice=0.0000 | size (shares)=73.0000
+      initialValue=$40.15 | currentValue=$0.00 | slug=sea-fio-tor-2026-02-07
+  4. Will AS Roma win on 2026-03-22?
+      outcome=No | entry (avgPrice)=0.3600 | curPrice=0.0000 | size (shares)=13,832.8889
+      initialValue=$4,979.83 | currentValue=$0.00 | slug=sea-rom-lec-2026-03-22
+  5. Will Bitcoin reach $90,000 by December 31, 2026?
+      outcome=No | entry (avgPrice)=0.5622 | curPrice=0.5450 | size (shares)=1,778.7747
+      initialValue=$1,000.00 | currentValue=$969.43 | slug=what-price-will-bitcoin-hit-before-2027
+  6. Will Cesena FC win on 2026-02-21?
+      outcome=Yes | entry (avgPrice)=0.4599 | curPrice=0.0000 | size (shares)=2,174.3421
+      initialValue=$1,000.00 | currentValue=$0.00 | slug=itsb-ces-spe-2026-02-21
+  7. Will Chelsea FC win on 2026-02-21?
+      outcome=Yes | entry (avgPrice)=0.8000 | curPrice=0.0000 | size (shares)=4,875.0000
+      initialValue=$3,900.00 | currentValue=$0.00 | slug=epl-che-bur-2026-02-21
+  8. Will Club Atlético de Madrid win on 2026-03-18?
+      outcome=Yes | entry (avgPrice)=0.3609 | curPrice=0.0000 | size (shares)=42,119.7276
+      initialValue=$15,199.87 | currentValue=$0.00 | slug=ucl-tot-atm1-2026-03-18
+  9. Will Crystal Palace FC win on 2026-03-19?
+      outcome=Yes | entry (avgPrice)=0.6400 | curPrice=0.0000 | size (shares)=7,812.5000
+      initialValue=$5,000.00 | currentValue=$0.00 | slug=col-aek-cry-2026-03-19
+  10. Will FC Barcelona win on 2026-02-16?
+      outcome=Yes | entry (avgPrice)=0.7300 | curPrice=0.0000 | size (shares)=4,739.7260
+      initialValue=$3,460.00 | currentValue=$0.00 | slug=lal-gir-bar-2026-02-16
+  11. Will FC Bayern München win on 2026-03-14?
+      outcome=Yes | entry (avgPrice)=0.6311 | curPrice=0.0000 | size (shares)=7,922.4055
+      initialValue=$5,000.00 | currentValue=$0.00 | slug=bun-b04-bay-2026-03-14
+  12. Will FC Internazionale Milano win on 2026-02-24?
+      outcome=Yes | entry (avgPrice)=0.7971 | curPrice=0.0000 | size (shares)=13,799.9594
+      initialValue=$10,999.99 | currentValue=$0.00 | slug=ucl-int2-bog1-2026-02-24
+  13. Will FC Internazionale Milano win on 2026-03-14?
+      outcome=Yes | entry (avgPrice)=0.6500 | curPrice=0.0000 | size (shares)=36,923.0769
+      initialValue=$23,999.96 | currentValue=$0.00 | slug=sea-int-ata-2026-03-14
+  14. Will FC Internazionale Milano win on 2026-03-22?
+      outcome=Yes | entry (avgPrice)=0.5900 | curPrice=0.0000 | size (shares)=59,070.9089
+      initialValue=$34,851.78 | currentValue=$0.00 | slug=sea-fio-int-2026-03-22
+  15. Will Juventus FC vs. Como 1907 end in a draw?
+      outcome=Yes | entry (avgPrice)=0.2900 | curPrice=0.0000 | size (shares)=3,448.2759
+      initialValue=$1,000.00 | currentValue=$0.00 | slug=sea-juv-com-2026-02-21
+  16. Will Juventus FC win on 2026-03-21?
+      outcome=Yes | entry (avgPrice)=0.7598 | curPrice=0.0000 | size (shares)=39,358.5817
+      initialValue=$29,904.10 | currentValue=$0.00 | slug=sea-juv-sas-2026-03-21
+  17. Will Kimi Antonelli be the 2026 F1 Drivers' Champion?
+      outcome=Yes | entry (avgPrice)=0.1847 | curPrice=0.3035 | size (shares)=29,613.1495
+      initialValue=$5,470.70 | currentValue=$8,987.59 | slug=2026-f1-drivers-champion
+  18. Will Liverpool FC win on 2026-03-03?
+      outcome=Yes | entry (avgPrice)=0.6800 | curPrice=0.0000 | size (shares)=44,117.6471
+      initialValue=$29,999.96 | currentValue=$0.00 | slug=epl-wol-liv-2026-03-03
+  19. Will Manchester City FC win on 2026-03-04?
+      outcome=Yes | entry (avgPrice)=0.7000 | curPrice=0.0000 | size (shares)=21,428.5714
+      initialValue=$14,999.98 | currentValue=$0.00 | slug=epl-mac-not-2026-03-04
+  20. Will Real Betis Balompié win on 2026-03-12?
+      outcome=Yes | entry (avgPrice)=0.4200 | curPrice=0.0000 | size (shares)=7,142.8571
+      initialValue=$2,999.99 | currentValue=$0.00 | slug=uel-pao2-bet1-2026-03-12
+  21. Will the Iranian regime fall before 2027?
+      outcome=No | entry (avgPrice)=0.5400 | curPrice=0.6650 | size (shares)=185.1852
+      initialValue=$100.00 | currentValue=$123.15 | slug=will-the-iranian-regime-fall-by-the-end-of-2026
+  22. Will the Iranian regime fall by June 30?
+      outcome=No | entry (avgPrice)=0.6500 | curPrice=0.8050 | size (shares)=1,538.4615
+      initialValue=$1,000.00 | currentValue=$1,238.46 | slug=will-the-iranian-regime-fall-by-june-30
+  23. Will UC Sampdoria win on 2026-02-21?
+      outcome=Yes | entry (avgPrice)=0.3599 | curPrice=0.0000 | size (shares)=1,711.8056
+      initialValue=$616.00 | currentValue=$0.00 | slug=itsb-man-sam-2026-02-21
+  24. Will Udinese Calcio vs. ACF Fiorentina end in a draw?
+      outcome=Yes | entry (avgPrice)=0.3200 | curPrice=0.0000 | size (shares)=46,875.0000
+      initialValue=$15,000.00 | currentValue=$0.00 | slug=sea-udi-fio-2026-03-02
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-27 10:17 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $16,002.90 — Will AC Milan win on 2026-03-01?
+      slug=sea-cre-mil-2026-03-01 | outcome=Yes
+  2. $14,765.21 — Will Atalanta BC win on 2026-02-25?
+      slug=ucl-ata1-bvb-2026-02-25 | outcome=Yes
+  3. $14,482.79 — Will Arsenal FC win on 2026-03-04?
+      slug=epl-bri-ars-2026-03-04 | outcome=Yes
+  4. $14,411.79 — Will Bologna FC 1909 win on 2026-03-02?
+      slug=sea-pis-bol-2026-03-02 | outcome=Yes
+  5. $14,062.50 — Will Manchester United FC win on 2026-03-01?
+      slug=epl-mun-cry-2026-03-01 | outcome=Yes
+
+========================================================================
+
+========================================================================
+Wallet: winner877
+Address: 0x85e5669beee6b80d887493e724987dabc5f56056
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 3500
+Warning: Activity capped at API max offset (3000); older trades are not available via offset pagination.
+Total TRADE events (activity): 3209
+Open position rows (/positions): 0
+Closed positions (/closed-positions): 1729
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $157,412.86
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $0.00
+  Combined (realized from history + current book): $157,412.86
+  Cross-check: GET /value (position value, not P/L): $0.00
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 1621 | Losses (< 0): 105 | Flat (0): 3
+  Win rate (wins / wins+losses, excludes flat): 93.9%
+  Win rate (wins / wins + material losses only, loss <= -$50): 96.6%
+     Material losses: 57 | Small losses (scratch, > -$50): 48
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $777.76
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 0
+Average initial notional per open position (initialValue, USDC): $0.00
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $494,313.39
+  Gross losses (sum of negative): $-336,900.53
+  Best closed position: $67,034.47
+  Worst closed position: $-58,849.32
+
+--- Category: trade counts (TRADE events) ---
+  crypto: 2865 trades
+  sports: 344 trades
+
+--- Category: settled positions (/closed-positions) ---
+  crypto: positions=1545 | wins=1463 losses=79 | win rate 94.9%
+  sports: positions=184 | wins=158 losses=26 | win rate 85.9%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 4
+Average days before resolution at first BUY: 0.0 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  (none — no open positions in API snapshot)
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-28 09:37 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $67,034.47 — Mavericks vs. Lakers
+      slug=nba-dal-lal-2026-02-12 | outcome=Lakers
+  2. $60,581.14 — Clippers vs. Kings
+      slug=nba-lac-sac-2026-02-06 | outcome=Clippers
+  3. $36,877.89 — Spurs vs. Clippers
+      slug=nba-sas-lac-2026-03-16 | outcome=Spurs
+  4. $35,480.61 — Lakers vs. Nets
+      slug=nba-lal-bkn-2026-02-03 | outcome=Lakers
+  5. $32,411.92 — Lakers vs. Wizards
+      slug=nba-lal-was-2026-01-30 | outcome=Lakers
+
+========================================================================
+
+========================================================================
+Wallet: SeniorLaghetto
+Address: 0x05ab749a8554fb7c852238c271d384bae6798145
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 3500
+Warning: Activity capped at API max offset (3000); older trades are not available via offset pagination.
+Total TRADE events (activity): 3200
+Open position rows (/positions): 50
+Closed positions (/closed-positions): 648
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $212,279.06
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $21,006.42
+  Combined (realized from history + current book): $233,285.49
+  Cross-check: GET /value (position value, not P/L): $48,783.43
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 428 | Losses (< 0): 212 | Flat (0): 8
+  Win rate (wins / wins+losses, excludes flat): 66.9%
+  Win rate (wins / wins + material losses only, loss <= -$50): 81.5%
+     Material losses: 97 | Small losses (scratch, > -$50): 115
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $201.78
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 50
+Average initial notional per open position (initialValue, USDC): $968.75
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $476,011.49
+  Gross losses (sum of negative): $-263,732.42
+  Best closed position: $116,597.50
+  Worst closed position: $-36,492.12
+
+--- Category: trade counts (TRADE events) ---
+  politics: 1894 trades
+  crypto: 1062 trades
+  sports: 206 trades
+  tech: 24 trades
+  culture: 14 trades
+
+--- Category: settled positions (/closed-positions) ---
+  politics: positions=297 | wins=208 losses=83 | win rate 71.5%
+  crypto: positions=246 | wins=155 losses=90 | win rate 63.3%
+  sports: positions=62 | wins=43 losses=18 | win rate 70.5%
+  other: positions=25 | wins=10 losses=15 | win rate 40.0%
+  culture: positions=13 | wins=10 losses=3 | win rate 76.9%
+  tech: positions=5 | wins=2 losses=3 | win rate 40.0%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 103
+Average days before resolution at first BUY: 250.8 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  1. EdgeX FDV above $500M one day after launch?
+      outcome=No | entry (avgPrice)=0.5100 | curPrice=0.5700 | size (shares)=15.0126
+      initialValue=$7.66 | currentValue=$8.56 | slug=edgex-fdv-above-one-day-after-launch
+  2. EdgeX FDV above $700M one day after launch?
+      outcome=No | entry (avgPrice)=0.8000 | curPrice=0.8450 | size (shares)=274.5000
+      initialValue=$219.60 | currentValue=$231.95 | slug=edgex-fdv-above-one-day-after-launch
+  3. Iran x Israel/US conflict ends by April 15?
+      outcome=No | entry (avgPrice)=0.7400 | curPrice=0.8250 | size (shares)=2,899.9779
+      initialValue=$2,145.98 | currentValue=$2,392.48 | slug=iran-x-israelus-conflict-ends-by
+  4. Iran x Israel/US conflict ends by April 30?
+      outcome=Yes | entry (avgPrice)=0.3522 | curPrice=0.3450 | size (shares)=6,828.4797
+      initialValue=$2,404.91 | currentValue=$2,355.83 | slug=iran-x-israelus-conflict-ends-by
+  5. Iran x Israel/US conflict ends by April 30?
+      outcome=No | entry (avgPrice)=0.6500 | curPrice=0.6550 | size (shares)=4.2300
+      initialValue=$2.75 | currentValue=$2.77 | slug=iran-x-israelus-conflict-ends-by
+  6. Iran x Israel/US conflict ends by December 31?
+      outcome=No | entry (avgPrice)=0.1722 | curPrice=0.1650 | size (shares)=9,540.4190
+      initialValue=$1,642.83 | currentValue=$1,574.17 | slug=iran-x-israelus-conflict-ends-by
+  7. Iran x Israel/US conflict ends by June 30?
+      outcome=Yes | entry (avgPrice)=0.6400 | curPrice=0.6400 | size (shares)=396.3090
+      initialValue=$253.64 | currentValue=$253.64 | slug=iran-x-israelus-conflict-ends-by
+  8. Iran x Israel/US conflict ends by May 15?
+      outcome=Yes | entry (avgPrice)=0.4568 | curPrice=0.4450 | size (shares)=17,303.8968
+      initialValue=$7,905.23 | currentValue=$7,700.23 | slug=iran-x-israelus-conflict-ends-by
+  9. MegaETH market cap (FDV) >$1.5B one day after launch?
+      outcome=Yes | entry (avgPrice)=0.1300 | curPrice=0.1400 | size (shares)=1,065.0642
+      initialValue=$138.46 | currentValue=$149.11 | slug=megaeth-market-cap-fdv-one-day-after-launch
+  10. MegaETH market cap (FDV) >$2B one day after launch?
+      outcome=No | entry (avgPrice)=0.8800 | curPrice=0.8850 | size (shares)=4,000.0019
+      initialValue=$3,520.00 | currentValue=$3,540.00 | slug=megaeth-market-cap-fdv-one-day-after-launch
+  11. MegaETH market cap (FDV) >$800M one day after launch?
+      outcome=No | entry (avgPrice)=0.6125 | curPrice=0.6700 | size (shares)=429.9305
+      initialValue=$263.34 | currentValue=$288.05 | slug=megaeth-market-cap-fdv-one-day-after-launch
+  12. Opensea FDV above $1B one day after launch?
+      outcome=No | entry (avgPrice)=0.7924 | curPrice=0.8350 | size (shares)=742.0690
+      initialValue=$588.04 | currentValue=$619.63 | slug=opensea-fdv-above-one-day-after-launch
+  13. Opensea FDV above $2B one day after launch?
+      outcome=No | entry (avgPrice)=0.9100 | curPrice=0.9250 | size (shares)=300.0000
+      initialValue=$273.00 | currentValue=$277.50 | slug=opensea-fdv-above-one-day-after-launch
+  14. Opensea FDV above $300M one day after launch?
+      outcome=No | entry (avgPrice)=0.5500 | curPrice=0.5500 | size (shares)=5.0000
+      initialValue=$2.75 | currentValue=$2.75 | slug=opensea-fdv-above-one-day-after-launch
+  15. Opensea FDV above $500M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.4385 | curPrice=0.3425 | size (shares)=1,306.8977
+      initialValue=$573.10 | currentValue=$447.61 | slug=opensea-fdv-above-one-day-after-launch
+  16. Over $10M committed to the P2P Protocol public sale?
+      outcome=No | entry (avgPrice)=0.1463 | curPrice=0.1800 | size (shares)=157.7222
+      initialValue=$23.08 | currentValue=$28.39 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  17. Over $12M committed to the P2P Protocol public sale?
+      outcome=Yes | entry (avgPrice)=0.6600 | curPrice=0.6500 | size (shares)=158.0253
+      initialValue=$104.30 | currentValue=$102.72 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  18. Over $14M committed to the P2P Protocol public sale?
+      outcome=Yes | entry (avgPrice)=0.6068 | curPrice=0.5750 | size (shares)=138.7448
+      initialValue=$84.19 | currentValue=$79.78 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  19. Over $16M committed to the P2P Protocol public sale?
+      outcome=No | entry (avgPrice)=0.3713 | curPrice=0.4650 | size (shares)=79.5755
+      initialValue=$29.54 | currentValue=$37.00 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  20. Over $18M committed to the P2P Protocol public sale?
+      outcome=Yes | entry (avgPrice)=0.4719 | curPrice=0.4500 | size (shares)=105.7960
+      initialValue=$49.92 | currentValue=$47.61 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  21. Over $20M committed to the P2P Protocol public sale?
+      outcome=No | entry (avgPrice)=0.5700 | curPrice=0.5850 | size (shares)=29.4509
+      initialValue=$16.79 | currentValue=$17.23 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  22. Over $35M committed to the P2P Protocol public sale?
+      outcome=No | entry (avgPrice)=0.6700 | curPrice=0.7350 | size (shares)=4.9389
+      initialValue=$3.31 | currentValue=$3.63 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  23. Predict.fun FDV above $100M one day after launch?
+      outcome=No | entry (avgPrice)=0.2440 | curPrice=0.2650 | size (shares)=2,373.3341
+      initialValue=$579.00 | currentValue=$628.93 | slug=predictfun-fdv-above-one-day-after-launch
+  24. Predict.fun FDV above $200M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.5567 | curPrice=0.5550 | size (shares)=260.1003
+      initialValue=$144.79 | currentValue=$144.36 | slug=predictfun-fdv-above-one-day-after-launch
+  25. Predict.fun FDV above $300M one day after launch?
+      outcome=No | entry (avgPrice)=0.5359 | curPrice=0.5750 | size (shares)=2,021.1673
+      initialValue=$1,083.05 | currentValue=$1,162.17 | slug=predictfun-fdv-above-one-day-after-launch
+  26. Predict.fun FDV above $400M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.3458 | curPrice=0.3100 | size (shares)=6,413.6186
+      initialValue=$2,217.69 | currentValue=$1,988.22 | slug=predictfun-fdv-above-one-day-after-launch
+  27. Predict.fun FDV above $500M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.2970 | curPrice=0.2350 | size (shares)=429.1077
+      initialValue=$127.43 | currentValue=$100.84 | slug=predictfun-fdv-above-one-day-after-launch
+  28. Predict.fun FDV above $50M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.9055 | curPrice=0.9000 | size (shares)=2,230.8100
+      initialValue=$2,020.02 | currentValue=$2,007.73 | slug=predictfun-fdv-above-one-day-after-launch
+  29. Predict.fun FDV above $600M one day after launch?
+      outcome=No | entry (avgPrice)=0.7399 | curPrice=0.8200 | size (shares)=2,951.0535
+      initialValue=$2,183.45 | currentValue=$2,419.86 | slug=predictfun-fdv-above-one-day-after-launch
+  30. Predict.fun FDV above $600M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.1900 | curPrice=0.1800 | size (shares)=228.0000
+      initialValue=$43.32 | currentValue=$41.04 | slug=predictfun-fdv-above-one-day-after-launch
+  31. Predict.fun FDV above $800M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.1973 | curPrice=0.1550 | size (shares)=729.8758
+      initialValue=$144.00 | currentValue=$113.13 | slug=predictfun-fdv-above-one-day-after-launch
+  32. SpaceX IPO closing market cap above $1.2T?
+      outcome=No | entry (avgPrice)=0.1000 | curPrice=0.0950 | size (shares)=80.0000
+      initialValue=$8.00 | currentValue=$7.60 | slug=spacex-ipo-closing-market-cap-above
+  33. SpaceX IPO closing market cap above $1.4T?
+      outcome=Yes | entry (avgPrice)=0.8400 | curPrice=0.8800 | size (shares)=81.5500
+      initialValue=$68.50 | currentValue=$71.76 | slug=spacex-ipo-closing-market-cap-above
+  34. SpaceX IPO closing market cap above $1.6T?
+      outcome=No | entry (avgPrice)=0.2700 | curPrice=0.2550 | size (shares)=305.0000
+      initialValue=$82.35 | currentValue=$77.78 | slug=spacex-ipo-closing-market-cap-above
+  35. SpaceX IPO closing market cap above $1.8T?
+      outcome=Yes | entry (avgPrice)=0.5488 | curPrice=0.5750 | size (shares)=133.5000
+      initialValue=$73.26 | currentValue=$76.76 | slug=spacex-ipo-closing-market-cap-above
+  36. SpaceX IPO closing market cap above $2.2T?
+      outcome=Yes | entry (avgPrice)=0.3000 | curPrice=0.3050 | size (shares)=66.8000
+      initialValue=$20.04 | currentValue=$20.37 | slug=spacex-ipo-closing-market-cap-above
+  37. SpaceX IPO closing market cap above $2.4T?
+      outcome=No | entry (avgPrice)=0.7100 | curPrice=0.7550 | size (shares)=63.4100
+      initialValue=$45.02 | currentValue=$47.87 | slug=spacex-ipo-closing-market-cap-above
+  38. SpaceX IPO closing market cap above $2T?
+      outcome=Yes | entry (avgPrice)=0.4012 | curPrice=0.4000 | size (shares)=250.0000
+      initialValue=$100.30 | currentValue=$100.00 | slug=spacex-ipo-closing-market-cap-above
+  39. Trump announces end of military operations against Iran by April 15th?
+      outcome=Yes | entry (avgPrice)=0.3187 | curPrice=0.2950 | size (shares)=4,388.1100
+      initialValue=$1,398.29 | currentValue=$1,294.49 | slug=trump-announces-end-of-military-operations-against-iran-by
+  40. Trump announces end of military operations against Iran by April 30th?
+      outcome=Yes | entry (avgPrice)=0.4717 | curPrice=0.4650 | size (shares)=760.1374
+      initialValue=$358.54 | currentValue=$353.46 | slug=trump-announces-end-of-military-operations-against-iran-by
+  41. Trump announces end of military operations against Iran by June 30th?
+      outcome=No | entry (avgPrice)=0.2390 | curPrice=0.2650 | size (shares)=1,157.6945
+      initialValue=$276.73 | currentValue=$306.79 | slug=trump-announces-end-of-military-operations-against-iran-by
+  42. US x Iran ceasefire by April 15?
+      outcome=Yes | entry (avgPrice)=0.2588 | curPrice=0.2200 | size (shares)=10,827.1769
+      initialValue=$2,802.25 | currentValue=$2,381.98 | slug=us-x-iran-ceasefire-by
+  43. US x Iran ceasefire by April 30?
+      outcome=No | entry (avgPrice)=0.6013 | curPrice=0.6050 | size (shares)=8,026.0450
+      initialValue=$4,825.88 | currentValue=$4,855.76 | slug=us-x-iran-ceasefire-by
+  44. US x Iran ceasefire by December 31?
+      outcome=Yes | entry (avgPrice)=0.7600 | curPrice=0.7600 | size (shares)=871.6600
+      initialValue=$662.46 | currentValue=$662.46 | slug=us-x-iran-ceasefire-by
+  45. US x Iran ceasefire by June 30?
+      outcome=No | entry (avgPrice)=0.3698 | curPrice=0.3950 | size (shares)=8,944.6376
+      initialValue=$3,307.94 | currentValue=$3,533.13 | slug=us-x-iran-ceasefire-by
+  46. US x Iran ceasefire by May 31?
+      outcome=No | entry (avgPrice)=0.4234 | curPrice=0.4750 | size (shares)=12,165.5524
+      initialValue=$5,150.88 | currentValue=$5,778.64 | slug=us-x-iran-ceasefire-by
+  47. USD.AI FDV above $400M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.0800 | curPrice=0.0850 | size (shares)=120.7800
+      initialValue=$9.66 | currentValue=$10.27 | slug=usdai-fdv-above-one-day-after-launch
+  48. USD.AI FDV above $500M one day after launch?
+      outcome=No | entry (avgPrice)=0.9400 | curPrice=0.9465 | size (shares)=50.0035
+      initialValue=$47.00 | currentValue=$47.33 | slug=usdai-fdv-above-one-day-after-launch
+  49. Will Crude Oil (CL) hit (HIGH) $100 by end of March?
+      outcome=No | entry (avgPrice)=0.2689 | curPrice=0.2530 | size (shares)=499.0000
+      initialValue=$134.16 | currentValue=$126.25 | slug=will-crude-oil-cl-hit-by-end-of-march
+  50. Will Crude Oil (CL) hit (HIGH) $105 by end of March?
+      outcome=Yes | entry (avgPrice)=0.4574 | curPrice=0.4455 | size (shares)=592.1598
+      initialValue=$270.85 | currentValue=$263.81 | slug=will-crude-oil-cl-hit-by-end-of-march
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-28 18:16 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $116,597.50 — Lighter market cap (FDV) >$2B one day after launch?
+      slug=lighter-market-cap-fdv-one-day-after-launch | outcome=No
+  2. $28,957.06 — Over $1.4B committed to the MegaETH public sale?
+      slug=over-1pt8b-committed-to-the-megaeth-public-sale | outcome=Yes
+  3. $26,533.75 — Will lighter perform an airdrop by December 31? 
+      slug=lighter-airdop-by | outcome=No
+  4. $21,503.45 — Will Crude Oil (CL) hit (HIGH) $105 by end of March?
+      slug=will-crude-oil-cl-hit-by-end-of-march | outcome=No
+  5. $19,647.54 — Lighter market cap (FDV) >$3B one day after launch?
+      slug=lighter-market-cap-fdv-one-day-after-launch | outcome=Yes
+
+========================================================================
+
+========================================================================
+Wallet: 10000Bets
+Address: 0x87684f29d70994464c6f533bc52eb693b4f4dd9b
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 3193
+Total TRADE events (activity): 2855
+Open position rows (/positions): 22
+Closed positions (/closed-positions): 413
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $26,478.26
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $4,668.50
+  Combined (realized from history + current book): $31,146.76
+  Cross-check: GET /value (position value, not P/L): $57,647.07
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 332 | Losses (< 0): 78 | Flat (0): 3
+  Win rate (wins / wins+losses, excludes flat): 81.0%
+  Win rate (wins / wins + material losses only, loss <= -$50): 86.2%
+     Material losses: 53 | Small losses (scratch, > -$50): 25
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $505.70
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 22
+Average initial notional per open position (initialValue, USDC): $2,409.83
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $152,026.14
+  Gross losses (sum of negative): $-125,547.88
+  Best closed position: $11,736.44
+  Worst closed position: $-15,446.25
+
+--- Category: trade counts (TRADE events) ---
+  sports: 1165 trades
+  crypto: 963 trades
+  politics: 471 trades
+  other: 217 trades
+  culture: 22 trades
+  tech: 17 trades
+
+--- Category: settled positions (/closed-positions) ---
+  sports: positions=180 | wins=146 losses=34 | win rate 81.1%
+  politics: positions=109 | wins=81 losses=26 | win rate 75.7%
+  crypto: positions=89 | wins=73 losses=16 | win rate 82.0%
+  other: positions=22 | wins=22 losses=0 | win rate 100.0%
+  culture: positions=9 | wins=7 losses=2 | win rate 77.8%
+  tech: positions=4 | wins=3 losses=0 | win rate 100.0%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 332
+Average days before resolution at first BUY: 35.6 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  1. Fed rate cut by April 2026 meeting?
+      outcome=No | entry (avgPrice)=0.8500 | curPrice=0.9825 | size (shares)=500.0000
+      initialValue=$425.00 | currentValue=$491.25 | slug=fed-rate-cut-by-629
+  2. Netanyahu out by March 31?
+      outcome=No | entry (avgPrice)=0.9710 | curPrice=0.9940 | size (shares)=686.1000
+      initialValue=$666.20 | currentValue=$681.98 | slug=netanyahu-out-before-2027
+  3. SAVE Act becomes law by April 30, 2026?
+      outcome=No | entry (avgPrice)=0.9881 | curPrice=0.9950 | size (shares)=9,118.4600
+      initialValue=$9,010.24 | currentValue=$9,072.87 | slug=save-act-becomes-law-by
+  4. Starmer out by June 30, 2026?
+      outcome=No | entry (avgPrice)=0.5600 | curPrice=0.5700 | size (shares)=495.2900
+      initialValue=$277.36 | currentValue=$282.32 | slug=starmer-out-in-2025
+  5. Starmer out by March 31, 2026?
+      outcome=No | entry (avgPrice)=0.9600 | curPrice=0.9920 | size (shares)=500.0000
+      initialValue=$480.00 | currentValue=$496.00 | slug=starmer-out-in-2025
+  6. US forces enter Iran by March 31?
+      outcome=No | entry (avgPrice)=0.6000 | curPrice=0.9150 | size (shares)=500.0000
+      initialValue=$300.00 | currentValue=$457.50 | slug=us-forces-enter-iran-by
+  7. US x Iran ceasefire by March 31?
+      outcome=No | entry (avgPrice)=0.8600 | curPrice=0.9755 | size (shares)=766.0000
+      initialValue=$658.76 | currentValue=$747.23 | slug=us-x-iran-ceasefire-by
+  8. Will Gold (GC) hit (HIGH) $5,500 by end of June?
+      outcome=No | entry (avgPrice)=0.7503 | curPrice=0.7465 | size (shares)=2,659.1153
+      initialValue=$1,995.06 | currentValue=$1,985.03 | slug=gc-hit-jun-2026
+  9. Will Gold (GC) hit (HIGH) $5,700 by end of June?
+      outcome=No | entry (avgPrice)=0.5636 | curPrice=0.7950 | size (shares)=4,129.1800
+      initialValue=$2,327.19 | currentValue=$3,282.70 | slug=gc-hit-jun-2026
+  10. Will Gold (GC) hit (HIGH) $6,000 by end of December?
+      outcome=No | entry (avgPrice)=0.5151 | curPrice=0.5250 | size (shares)=2,713.7906
+      initialValue=$1,397.99 | currentValue=$1,424.74 | slug=what-will-gold-gc-hit-by-end-of-december
+  11. Will Gold (GC) hit (HIGH) $6,000 by end of June?
+      outcome=No | entry (avgPrice)=0.7989 | curPrice=0.8750 | size (shares)=1,568.0915
+      initialValue=$1,252.70 | currentValue=$1,372.08 | slug=gc-hit-jun-2026
+  12. Will Gold (GC) hit (HIGH) $6,200 by end of June?
+      outcome=No | entry (avgPrice)=0.9040 | curPrice=0.9050 | size (shares)=829.0100
+      initialValue=$749.45 | currentValue=$750.25 | slug=gc-hit-jun-2026
+  13. Will Gold (GC) hit (HIGH) $6,500 by end of June?
+      outcome=No | entry (avgPrice)=0.8216 | curPrice=0.9300 | size (shares)=13,834.5677
+      initialValue=$11,366.11 | currentValue=$12,866.15 | slug=gc-hit-jun-2026
+  14. Will Gold (GC) hit (HIGH) $7,000 by end of December?
+      outcome=No | entry (avgPrice)=0.7800 | curPrice=0.7900 | size (shares)=2,069.9900
+      initialValue=$1,614.59 | currentValue=$1,635.29 | slug=what-will-gold-gc-hit-by-end-of-december
+  15. Will Jon Ossoff win the 2028 Democratic presidential nomination?
+      outcome=Yes | entry (avgPrice)=0.0450 | curPrice=0.0580 | size (shares)=20,785.1000
+      initialValue=$935.08 | currentValue=$1,205.54 | slug=democratic-presidential-nominee-2028
+  16. Will Silver (SI) hit (HIGH) $100 by end of March?
+      outcome=No | entry (avgPrice)=0.9700 | curPrice=0.9975 | size (shares)=67.3400
+      initialValue=$65.32 | currentValue=$67.17 | slug=will-silver-si-hit-by-end-of-march
+  17. Will Silver (SI) hit (HIGH) $120 by end of June?
+      outcome=No | entry (avgPrice)=0.7744 | curPrice=0.8010 | size (shares)=9,180.7200
+      initialValue=$7,109.94 | currentValue=$7,353.76 | slug=si-hit-jun-2026
+  18. Will Silver (SI) hit (HIGH) $130 by end of June?
+      outcome=No | entry (avgPrice)=0.8132 | curPrice=0.8900 | size (shares)=3,478.5000
+      initialValue=$2,828.66 | currentValue=$3,095.86 | slug=si-hit-jun-2026
+  19. Will Silver (SI) hit (HIGH) $150 by end of June?
+      outcome=No | entry (avgPrice)=0.8607 | curPrice=0.9250 | size (shares)=7,739.6400
+      initialValue=$6,661.69 | currentValue=$7,159.17 | slug=si-hit-jun-2026
+  20. Will Silver (SI) hit (HIGH) $95 by end of March?
+      outcome=No | entry (avgPrice)=0.9644 | curPrice=0.9925 | size (shares)=1,500.0000
+      initialValue=$1,446.60 | currentValue=$1,488.75 | slug=will-silver-si-hit-by-end-of-march
+  21. Will the Fed’s lower bound reach 2.75% or lower before 2027?
+      outcome=No | entry (avgPrice)=0.6108 | curPrice=0.8150 | size (shares)=904.2166
+      initialValue=$552.32 | currentValue=$736.94 | slug=what-will-fed-rate-hit-before-2027
+  22. Will the Iranian regime fall by March 31?
+      outcome=No | entry (avgPrice)=0.8960 | curPrice=0.9945 | size (shares)=1,000.0000
+      initialValue=$896.00 | currentValue=$994.50 | slug=will-the-iranian-regime-fall-by-march-31
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-28 13:41 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $11,736.44 — Penguins vs. Kings
+      slug=nhl-pit-lak-2025-10-16 | outcome=Penguins
+  2. $5,620.02 — Canucks vs. Blackhawks
+      slug=nhl-van-chi-2025-10-17 | outcome=Canucks
+  3. $5,455.39 — Will Bitcoin reach $85,000 in February?
+      slug=what-price-will-bitcoin-hit-in-february-2026 | outcome=No
+  4. $4,637.13 — Capitals vs. Sharks
+      slug=nhl-wsh-sj-2025-12-03 | outcome=Capitals
+  5. $4,452.97 — Cardinals vs. Colts
+      slug=nfl-ari-ind-2025-10-12 | outcome=Colts
+
+========================================================================
+
+========================================================================
+Wallet: MonsterTraders
+Address: 0x079a7f8bdc662688a5c234f5cfb8ef651430c538
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 238
+Total TRADE events (activity): 151
+Open position rows (/positions): 10
+Closed positions (/closed-positions): 114
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $35,758.34
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $-1.25
+  Combined (realized from history + current book): $35,757.09
+  Cross-check: GET /value (position value, not P/L): $15.57
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 111 | Losses (< 0): 3 | Flat (0): 0
+  Win rate (wins / wins+losses, excludes flat): 97.4%
+  Win rate (wins / wins + material losses only, loss <= -$50): 97.4%
+     Material losses: 3 | Small losses (scratch, > -$50): 0
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $386.85
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 10
+Average initial notional per open position (initialValue, USDC): $1.68
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $40,511.92
+  Gross losses (sum of negative): $-4,753.58
+  Best closed position: $8,175.54
+  Worst closed position: $-2,640.00
+
+--- Category: trade counts (TRADE events) ---
+  crypto: 80 trades
+  sports: 28 trades
+  tech: 21 trades
+  politics: 10 trades
+  culture: 6 trades
+  other: 6 trades
+
+--- Category: settled positions (/closed-positions) ---
+  crypto: positions=75 | wins=75 losses=0 | win rate 100.0%
+  sports: positions=14 | wins=13 losses=1 | win rate 92.9%
+  tech: positions=12 | wins=10 losses=2 | win rate 83.3%
+  politics: positions=5 | wins=5 losses=0 | win rate 100.0%
+  other: positions=5 | wins=5 losses=0 | win rate 100.0%
+  culture: positions=3 | wins=3 losses=0 | win rate 100.0%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 91
+Average days before resolution at first BUY: 38.2 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  1. Over $10M committed to the P2P Protocol public sale?
+      outcome=Yes | entry (avgPrice)=0.9300 | curPrice=0.8250 | size (shares)=2.1483
+      initialValue=$2.00 | currentValue=$1.77 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  2. Over $12M committed to the P2P Protocol public sale?
+      outcome=Yes | entry (avgPrice)=0.9000 | curPrice=0.6500 | size (shares)=1.6633
+      initialValue=$1.50 | currentValue=$1.08 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  3. Over $14M committed to the P2P Protocol public sale?
+      outcome=Yes | entry (avgPrice)=0.8800 | curPrice=0.5750 | size (shares)=1.6998
+      initialValue=$1.50 | currentValue=$0.98 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  4. Over $6M committed to the P2P Protocol public sale?
+      outcome=Yes | entry (avgPrice)=0.9980 | curPrice=1.0000 | size (shares)=1.5130
+      initialValue=$1.51 | currentValue=$1.51 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  5. Over $8M committed to the P2P Protocol public sale?
+      outcome=Yes | entry (avgPrice)=0.9770 | curPrice=0.9170 | size (shares)=2.0468
+      initialValue=$2.00 | currentValue=$1.88 | slug=total-commitments-for-the-p2p-protocol-public-sale-on-metadao
+  6. Will Alphabet be the largest company in the world by market cap on March 31?
+      outcome=No | entry (avgPrice)=0.9820 | curPrice=0.9985 | size (shares)=1.5274
+      initialValue=$1.50 | currentValue=$1.53 | slug=largest-company-end-of-march-588
+  7. Will Amazon be the largest company in the world by market cap on March 31?
+      outcome=No | entry (avgPrice)=0.9990 | curPrice=0.9995 | size (shares)=1.3710
+      initialValue=$1.37 | currentValue=$1.37 | slug=largest-company-end-of-march-588
+  8. Will Microsoft be the largest company in the world by market cap on March 31?
+      outcome=No | entry (avgPrice)=0.9990 | curPrice=0.9995 | size (shares)=2.5520
+      initialValue=$2.55 | currentValue=$2.55 | slug=largest-company-end-of-march-588
+  9. Will Saudi Aramco be the largest company in the world by market cap on March 31?
+      outcome=No | entry (avgPrice)=0.9970 | curPrice=0.9995 | size (shares)=1.2537
+      initialValue=$1.25 | currentValue=$1.25 | slug=largest-company-end-of-march-588
+  10. Will Tesla be the largest company in the world by market cap on March 31?
+      outcome=No | entry (avgPrice)=0.9990 | curPrice=0.9995 | size (shares)=1.6510
+      initialValue=$1.65 | currentValue=$1.65 | slug=largest-company-end-of-march-588
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-27 01:00 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $8,175.54 — Iran agrees to surrender enriched uranium stockpile by December 31, 20
+      slug=iran-agrees-to-surrender-enriched-uranium-stockpile-by | outcome=No
+  2. $7,864.80 — Will Frankie Capan finish in the Top 10 at the 2026 Puerto Rico Open?
+      slug=2026-puerto-rico-open-top10 | outcome=No
+  3. $5,681.10 — Will Apple (AAPL) close above $255 on January 26?
+      slug=aapl-close-above-on-january-26-2026 | outcome=Yes
+  4. $2,821.50 — Flyers vs. Utah
+      slug=nhl-phi-utah-2026-01-21 | outcome=Utah
+  5. $2,726.70 — Will the announcers say "Nasty" during Holloway vs. Oliveira 2?
+      slug=ufc-mentions-holloway-vs-oliveira-2 | outcome=No
+
+========================================================================
+
+========================================================================
+Wallet: Castolo
+Address: 0x87909a89ee551c8616e5bff9089c81545bfd010b
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 3500
+Warning: Activity capped at API max offset (3000); older trades are not available via offset pagination.
+Total TRADE events (activity): 3383
+Open position rows (/positions): 2
+Closed positions (/closed-positions): 1488
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $204,462.71
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $-24.36
+  Combined (realized from history + current book): $204,438.35
+  Cross-check: GET /value (position value, not P/L): $0.00
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 898 | Losses (< 0): 583 | Flat (0): 7
+  Win rate (wins / wins+losses, excludes flat): 60.6%
+  Win rate (wins / wins + material losses only, loss <= -$50): 72.9%
+     Material losses: 334 | Small losses (scratch, > -$50): 249
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $188.90
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 2
+Average initial notional per open position (initialValue, USDC): $1.21
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $400,402.11
+  Gross losses (sum of negative): $-195,939.39
+  Best closed position: $15,696.65
+  Worst closed position: $-5,812.02
+
+--- Category: trade counts (TRADE events) ---
+  sports: 3269 trades
+  crypto: 114 trades
+
+--- Category: settled positions (/closed-positions) ---
+  sports: positions=1415 | wins=851 losses=557 | win rate 60.4%
+  crypto: positions=71 | wins=47 losses=24 | win rate 66.2%
+  culture: positions=1 | wins=0 losses=1 | win rate 0.0%
+  tech: positions=1 | wins=0 losses=1 | win rate 0.0%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 2
+Average days before resolution at first BUY: 28.5 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  1. Austria vs. Ghana: O/U 2.5
+      outcome=Under | entry (avgPrice)=0.4750 | curPrice=0.0000 | size (shares)=1.0215
+      initialValue=$0.49 | currentValue=$0.00 | slug=fif-aut-gha-2026-03-27-more-markets
+  2. Will Montenegro win on 2026-03-27?
+      outcome=No | entry (avgPrice)=0.3100 | curPrice=0.0000 | size (shares)=6.2500
+      initialValue=$1.94 | currentValue=$0.00 | slug=fif-mon-and-2026-03-27
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-28 02:43 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $15,696.65 — Will FC St. Pauli 1910 win on 2026-02-07?
+      slug=bun-pau-stu-2026-02-07 | outcome=Yes
+  2. $13,115.48 — Will Villarreal CF win on 2026-02-22?
+      slug=lal-vil-val-2026-02-22 | outcome=Yes
+  3. $9,858.46 — Qarabağ Ağdam FK vs. Newcastle United FC: O/U 4.5
+      slug=ucl-qar1-new-2026-02-18-more-markets | outcome=Over
+  4. $7,623.60 — Will Viborg FF vs. FC Midtjylland end in a draw?
+      slug=den-vib-mid-2026-03-22 | outcome=Yes
+  5. $6,374.47 — Will RC Strasbourg Alsace win on 2026-02-22?
+      slug=fl1-str-lyo-2026-02-22 | outcome=Yes
+
+========================================================================
+
+========================================================================
+Wallet: jack66666
+Address: 0x05b21f43e056cdf3f26ae5f28dc0238495e2a469
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 3500
+Warning: Activity capped at API max offset (3000); older trades are not available via offset pagination.
+Total TRADE events (activity): 3414
+Open position rows (/positions): 1
+Closed positions (/closed-positions): 152
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $59,984.49
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $993.89
+  Combined (realized from history + current book): $60,978.39
+  Cross-check: GET /value (position value, not P/L): $38,886.96
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 123 | Losses (< 0): 29 | Flat (0): 0
+  Win rate (wins / wins+losses, excludes flat): 80.9%
+  Win rate (wins / wins + material losses only, loss <= -$50): 83.1%
+     Material losses: 25 | Small losses (scratch, > -$50): 4
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $1,025.83
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 1
+Average initial notional per open position (initialValue, USDC): $38,804.36
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $115,179.96
+  Gross losses (sum of negative): $-55,195.47
+  Best closed position: $13,440.33
+  Worst closed position: $-14,379.24
+
+--- Category: trade counts (TRADE events) ---
+  sports: 3414 trades
+
+--- Category: settled positions (/closed-positions) ---
+  sports: positions=152 | wins=123 losses=29 | win rate 80.9%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 1
+Average days before resolution at first BUY: 0.0 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  1. Wizards vs. Warriors
+      outcome=Warriors | entry (avgPrice)=0.9979 | curPrice=1.0000 | size (shares)=38,886.9553
+      initialValue=$38,804.36 | currentValue=$38,886.96 | slug=nba-was-gsw-2026-03-27
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-28 04:27 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $13,440.33 — Lakers vs. Suns
+      slug=nba-lal-phx-2025-12-14 | outcome=Suns
+  2. $10,980.79 — LoL: EDward Gaming vs ThunderTalk Gaming - Game 1 Winner
+      slug=lol-edg-tt-2026-01-23 | outcome=ThunderTalk Gaming
+  3. $8,368.42 — Bulls vs. Nuggets
+      slug=nba-chi-den-2025-10-14 | outcome=Bulls
+  4. $5,686.23 — Spurs vs. Mavericks
+      slug=nba-sas-dal-2025-10-22 | outcome=Mavericks
+  5. $5,368.58 — Kings vs. Suns
+      slug=nba-sac-phx-2025-10-22 | outcome=Kings
+
+========================================================================
+
+========================================================================
+Wallet: scottilicious
+Address: 0x000d257d2dc7616feaef4ae0f14600fdf50a758e
+========================================================================
+
+Data sources: GET /positions (open book), GET /closed-positions (settled
+history), GET /activity (fills). Do not use /positions?closed=true for
+settled stats — it duplicates the open snapshot.
+
+Activity rows fetched: 3500
+Warning: Activity capped at API max offset (3000); older trades are not available via offset pagination.
+Total TRADE events (activity): 3293
+Open position rows (/positions): 64
+Closed positions (/closed-positions): 1088
+
+--- P/L (USDC) ---
+  Sum realized P/L (all /closed-positions): $1,443,847.24
+  Open book P/L (sum of cashPnl+realizedPnl on /positions): $88,844.41
+  Combined (realized from history + current book): $1,532,691.65
+  Cross-check: GET /value (position value, not P/L): $1,265,163.97
+
+--- Win rate (settled positions from /closed-positions) ---
+  Wins (realizedPnl > 0): 897 | Losses (< 0): 187 | Flat (0): 4
+  Win rate (wins / wins+losses, excludes flat): 82.7%
+  Win rate (wins / wins + material losses only, loss <= -$50): 84.1%
+     Material losses: 170 | Small losses (scratch, > -$50): 17
+
+--- Trade sizing (TRADE activity fills) ---
+Average trade notional (USDC): $2,309.50
+
+--- Open position sizing (current book /positions) ---
+Open positions count: 64
+Average initial notional per open position (initialValue, USDC): $18,570.68
+
+--- P/L breakdown (closed history, realizedPnl per position) ---
+  Gross wins (sum of positive): $2,371,491.97
+  Gross losses (sum of negative): $-927,644.73
+  Best closed position: $53,110.78
+  Worst closed position: $-60,658.39
+
+--- Category: trade counts (TRADE events) ---
+  politics: 3233 trades
+  culture: 60 trades
+
+--- Category: settled positions (/closed-positions) ---
+  politics: positions=878 | wins=754 losses=123 | win rate 86.0%
+  culture: positions=82 | wins=39 losses=42 | win rate 48.1%
+  crypto: positions=82 | wins=66 losses=15 | win rate 81.5%
+  tech: positions=22 | wins=21 losses=1 | win rate 95.5%
+  other: positions=20 | wins=13 losses=6 | win rate 68.4%
+  sports: positions=4 | wins=4 losses=0 | win rate 100.0%
+
+--- Entry timing (first BUY vs market endDate) ---
+Samples with known endDate: 99
+Average days before resolution at first BUY: 120.5 days
+
+--- CURRENT OPEN POSITIONS (GET /positions) ---
+  1. 2026 Balance of Power: R Senate, D House
+      outcome=Yes | entry (avgPrice)=0.5300 | curPrice=0.3650 | size (shares)=91.9000
+      initialValue=$48.71 | currentValue=$33.54 | slug=balance-of-power-2026-midterms
+  2. Delcy Rodríguez out as leader of Venezuela by December 31, 2026?
+      outcome=No | entry (avgPrice)=0.6597 | curPrice=0.7500 | size (shares)=7,125.4118
+      initialValue=$4,700.60 | currentValue=$5,344.06 | slug=delcy-rodrguez-out-as-leader-of-venezuela-by
+  3. Delcy Rodríguez out as leader of Venezuela by March 31, 2026?
+      outcome=No | entry (avgPrice)=0.9799 | curPrice=0.9960 | size (shares)=2,130.3300
+      initialValue=$2,087.61 | currentValue=$2,121.81 | slug=delcy-rodrguez-out-as-leader-of-venezuela-by
+  4. ICE shooter charged by March 31?
+      outcome=Yes | entry (avgPrice)=0.3380 | curPrice=0.0095 | size (shares)=11,250.2300
+      initialValue=$3,802.08 | currentValue=$106.88 | slug=ice-shooter-charged-by-march-31
+  5. Iran x Israel/US conflict ends by December 31?
+      outcome=Yes | entry (avgPrice)=0.8500 | curPrice=0.8350 | size (shares)=107.0000
+      initialValue=$90.95 | currentValue=$89.34 | slug=iran-x-israelus-conflict-ends-by
+  6. Israel and Saudi Arabia normalize relations by March 31?
+      outcome=No | entry (avgPrice)=0.9667 | curPrice=0.9945 | size (shares)=2,541.8888
+      initialValue=$2,457.18 | currentValue=$2,527.91 | slug=israel-and-saudi-arabia-normalize-relations-by-march-31
+  7. Israel strike on Yemen by June 30, 2026?
+      outcome=Yes | entry (avgPrice)=0.8293 | curPrice=0.9100 | size (shares)=2,920.6800
+      initialValue=$2,422.09 | currentValue=$2,657.82 | slug=israel-strike-on-yemen-by-593
+  8. Israel strike on Yemen by March 31, 2026?
+      outcome=Yes | entry (avgPrice)=0.4473 | curPrice=0.6700 | size (shares)=683.6800
+      initialValue=$305.82 | currentValue=$458.07 | slug=israel-strike-on-yemen-by-593
+  9. Mamdani opens city-owned grocery store  by June 30?
+      outcome=Yes | entry (avgPrice)=0.4710 | curPrice=0.0550 | size (shares)=7,017.3800
+      initialValue=$3,305.39 | currentValue=$385.96 | slug=mamdani-opens-city-owned-grocery-store-by-june-30
+  10. Metamask FDV above $700M one day after launch?
+      outcome=Yes | entry (avgPrice)=0.9400 | curPrice=0.2635 | size (shares)=1,420.6400
+      initialValue=$1,335.40 | currentValue=$374.34 | slug=metamask-fdv-above-one-day-after-launch
+  11. Mojtaba Khamenei leaves Iran by March 31, 2026?
+      outcome=No | entry (avgPrice)=0.9496 | curPrice=0.9955 | size (shares)=7,355.4900
+      initialValue=$6,985.05 | currentValue=$7,322.39 | slug=mojtaba-khamenei-leaves-iran-by
+  12. Netanyahu out by April 30?
+      outcome=No | entry (avgPrice)=0.9400 | curPrice=0.9600 | size (shares)=8,509.6933
+      initialValue=$7,999.11 | currentValue=$8,169.31 | slug=netanyahu-out-before-2027
+  13. Netanyahu out by June 30?
+      outcome=No | entry (avgPrice)=0.8687 | curPrice=0.8850 | size (shares)=9,999.9893
+      initialValue=$8,687.09 | currentValue=$8,849.99 | slug=netanyahu-out-before-2027
+  14. Netanyahu out by March 31?
+      outcome=No | entry (avgPrice)=0.9686 | curPrice=0.9940 | size (shares)=298,723.3589
+      initialValue=$289,338.67 | currentValue=$296,931.02 | slug=netanyahu-out-before-2027
+  15. Pete Hegseth out as Secretary of Defense by March 31?
+      outcome=Yes | entry (avgPrice)=0.2254 | curPrice=0.0040 | size (shares)=427.6300
+      initialValue=$96.40 | currentValue=$1.71 | slug=pete-hegseth-out-as-secretary-of-defense-by-march-31
+  16. SAVE Act becomes law by April 30, 2026?
+      outcome=No | entry (avgPrice)=0.9289 | curPrice=0.9950 | size (shares)=26,749.2996
+      initialValue=$24,847.29 | currentValue=$26,615.55 | slug=save-act-becomes-law-by
+  17. State of Siege declared in Chile by June 30?
+      outcome=No | entry (avgPrice)=0.8864 | curPrice=0.8550 | size (shares)=1,398.3000
+      initialValue=$1,239.41 | currentValue=$1,195.55 | slug=state-of-siege-declared-in-chile-by-june-30
+  18. US recognizes Reza Pahlavi as leader of Iran in 2026?
+      outcome=No | entry (avgPrice)=0.7300 | curPrice=0.8500 | size (shares)=500.0000
+      initialValue=$365.00 | currentValue=$425.00 | slug=us-recognizes-reza-pahlavi-as-leader-of-iran-in2026
+  19. US-Iran nuclear deal by March 31?
+      outcome=No | entry (avgPrice)=0.9640 | curPrice=0.9895 | size (shares)=15,785.2933
+      initialValue=$15,217.18 | currentValue=$15,619.55 | slug=us-iran-nuclear-deal-by-march-31
+  20. Will Andy Beshear win the 2028 Democratic presidential nomination?
+      outcome=Yes | entry (avgPrice)=0.0247 | curPrice=0.0215 | size (shares)=20,798.1700
+      initialValue=$513.05 | currentValue=$447.16 | slug=democratic-presidential-nominee-2028
+  21. Will Brazil join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9785 | curPrice=0.9615 | size (shares)=761.5500
+      initialValue=$745.20 | currentValue=$732.23 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  22. Will China join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9970 | curPrice=0.9995 | size (shares)=23.3900
+      initialValue=$23.32 | currentValue=$23.38 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  23. Will Denmark join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9800 | curPrice=0.9950 | size (shares)=438.4600
+      initialValue=$429.69 | currentValue=$436.27 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  24. Will Eric Swalwell win the California Governor Election in 2026?
+      outcome=Yes | entry (avgPrice)=0.6378 | curPrice=0.5950 | size (shares)=3,376.6700
+      initialValue=$2,153.51 | currentValue=$2,009.12 | slug=california-governor-election-2026
+  25. Will Finland join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9800 | curPrice=0.9900 | size (shares)=580.2100
+      initialValue=$568.59 | currentValue=$574.41 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  26. Will France join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9848 | curPrice=0.9910 | size (shares)=1,964.8400
+      initialValue=$1,935.02 | currentValue=$1,947.16 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  27. Will François Hollande win the 2027 French presidential election?
+      outcome=Yes | entry (avgPrice)=0.0239 | curPrice=0.0340 | size (shares)=413.2700
+      initialValue=$9.89 | currentValue=$14.05 | slug=next-french-presidential-election
+  28. Will Gavin Newsom win the 2028 US Presidential Election?
+      outcome=Yes | entry (avgPrice)=0.1800 | curPrice=0.1735 | size (shares)=13,561.2200
+      initialValue=$2,441.02 | currentValue=$2,352.87 | slug=presidential-election-winner-2028
+  29. Will Germany join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9825 | curPrice=0.9925 | size (shares)=16.2800
+      initialValue=$16.00 | currentValue=$16.16 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  30. Will Germany strike Iran by March 31?
+      outcome=No | entry (avgPrice)=0.9739 | curPrice=0.9965 | size (shares)=7,243.1600
+      initialValue=$7,054.34 | currentValue=$7,217.81 | slug=which-countries-will-strike-iran-by-march-31
+  31. Will Graham Platner be the Democratic nominee for Senate in Maine?
+      outcome=Yes | entry (avgPrice)=0.5215 | curPrice=0.8350 | size (shares)=88,817.0374
+      initialValue=$46,321.28 | currentValue=$74,162.23 | slug=maine-democratic-senate-primary-winner
+  32. Will Ilhan Omar be the Democratic Nominee for MN-05?
+      outcome=Yes | entry (avgPrice)=0.6600 | curPrice=0.8550 | size (shares)=5.0000
+      initialValue=$3.30 | currentValue=$4.28 | slug=mn-05-democratic-primary-winner
+  33. Will India join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9502 | curPrice=0.9720 | size (shares)=163.9600
+      initialValue=$155.80 | currentValue=$159.37 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  34. Will Iran claim responsibility for Oslo Embassy attack?
+      outcome=No | entry (avgPrice)=0.9686 | curPrice=0.9925 | size (shares)=8,922.7700
+      initialValue=$8,642.68 | currentValue=$8,855.85 | slug=will-iran-claim-responsibility-for-oslo-embassy-attack
+  35. Will Israel launch a major ground offensive in Gaza by March 31?
+      outcome=No | entry (avgPrice)=0.9660 | curPrice=0.9805 | size (shares)=139.2700
+      initialValue=$134.53 | currentValue=$136.55 | slug=will-israel-launch-a-major-ground-offensive-in-gaza-by-october-31
+  36. Will Israel take military action in Lebanon on March 20, 2026?
+      outcome=Yes | entry (avgPrice)=0.8134 | curPrice=0.9995 | size (shares)=10,399.3500
+      initialValue=$8,458.65 | currentValue=$10,394.15 | slug=israel-military-action-against-lebanon-on
+  37. Will John Cornyn win the 2026 Texas Republican Primary?
+      outcome=Yes | entry (avgPrice)=0.8796 | curPrice=0.3150 | size (shares)=53,522.8052
+      initialValue=$47,077.27 | currentValue=$16,859.68 | slug=texas-republican-senate-primary-winner
+  38. Will Kevin Warsh be confirmed as Fed Chair?
+      outcome=Yes | entry (avgPrice)=0.9430 | curPrice=0.9490 | size (shares)=10,114.1800
+      initialValue=$9,537.36 | currentValue=$9,598.36 | slug=who-will-be-confirmed-as-fed-chair
+  39. Will Mark Kelly win the 2028 Democratic presidential nomination?
+      outcome=Yes | entry (avgPrice)=0.0266 | curPrice=0.0210 | size (shares)=23,930.1693
+      initialValue=$635.59 | currentValue=$502.53 | slug=democratic-presidential-nominee-2028
+  40. Will Norway join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9860 | curPrice=0.9960 | size (shares)=6.3800
+      initialValue=$6.29 | currentValue=$6.35 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  41. Will Reza Pahlavi enter Iran by June 30?
+      outcome=No | entry (avgPrice)=0.6999 | curPrice=0.8850 | size (shares)=6,016.0400
+      initialValue=$4,210.58 | currentValue=$5,324.20 | slug=will-reza-pahlavi-enter-iran-by-june-30
+  42. Will Reza Pahlavi enter Iran by March 31?
+      outcome=No | entry (avgPrice)=0.9080 | curPrice=0.9975 | size (shares)=141,036.0646
+      initialValue=$128,060.32 | currentValue=$140,683.47 | slug=will-reza-pahlavi-enter-iran-by-june-30
+  43. Will Ruben Gallego win the 2028 Democratic presidential nomination?
+      outcome=Yes | entry (avgPrice)=0.0147 | curPrice=0.0175 | size (shares)=72,302.4700
+      initialValue=$1,061.18 | currentValue=$1,265.29 | slug=democratic-presidential-nominee-2028
+  44. Will Sarah Knafo advance to the second round of the 2026 Paris municipal election?
+      outcome=Yes | entry (avgPrice)=0.7847 | curPrice=0.0000 | size (shares)=3,338.6183
+      initialValue=$2,619.88 | currentValue=$0.00 | slug=who-will-advance-to-2026-paris-municipal-election-2nd-round
+  45. Will Sinners win Best Sound at the 98th Academy Awards?
+      outcome=Yes | entry (avgPrice)=0.1053 | curPrice=0.0000 | size (shares)=407.2300
+      initialValue=$42.87 | currentValue=$0.00 | slug=oscars-2026-best-sound-winner
+  46. Will Spain join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9860 | curPrice=0.9900 | size (shares)=120.4900
+      initialValue=$118.80 | currentValue=$119.29 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  47. Will Sweden join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9860 | curPrice=0.9910 | size (shares)=8.8800
+      initialValue=$8.76 | currentValue=$8.80 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  48. Will Switzerland join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9800 | curPrice=0.9945 | size (shares)=573.9800
+      initialValue=$562.48 | currentValue=$570.82 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  49. Will the Democratic Party control the House after the 2026 Midterm elections?
+      outcome=Yes | entry (avgPrice)=0.7840 | curPrice=0.8450 | size (shares)=41,951.6863
+      initialValue=$32,888.44 | currentValue=$35,449.17 | slug=which-party-will-win-the-house-in-2026
+  50. Will the Democrats win the Maine Senate race in 2026?
+      outcome=Yes | entry (avgPrice)=0.6114 | curPrice=0.7350 | size (shares)=3,285.2700
+      initialValue=$2,008.46 | currentValue=$2,414.67 | slug=maine-senate-election-winner
+  51. Will the Democrats win the Wisconsin governor race in 2026?
+      outcome=Yes | entry (avgPrice)=0.6400 | curPrice=0.7600 | size (shares)=112.4900
+      initialValue=$71.99 | currentValue=$85.49 | slug=wisconsin-governor-winner-2026
+  52. Will the Iranian regime fall before 2027?
+      outcome=No | entry (avgPrice)=0.6300 | curPrice=0.6650 | size (shares)=5,000.0000
+      initialValue=$3,150.00 | currentValue=$3,325.00 | slug=will-the-iranian-regime-fall-by-the-end-of-2026
+  53. Will the Iranian regime fall by April 30?
+      outcome=No | entry (avgPrice)=0.8710 | curPrice=0.9350 | size (shares)=251,035.9299
+      initialValue=$218,650.79 | currentValue=$234,718.59 | slug=will-the-iranian-regime-fall-by-april-30
+  54. Will the Iranian regime fall by June 30?
+      outcome=No | entry (avgPrice)=0.7559 | curPrice=0.8150 | size (shares)=60,588.5255
+      initialValue=$45,801.35 | currentValue=$49,379.65 | slug=will-the-iranian-regime-fall-by-june-30
+  55. Will the Iranian regime fall by March 31?
+      outcome=No | entry (avgPrice)=0.7959 | curPrice=0.9945 | size (shares)=169,808.8914
+      initialValue=$135,156.50 | currentValue=$168,874.94 | slug=will-the-iranian-regime-fall-by-march-31
+  56. Will the Netherlands join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9799 | curPrice=0.9950 | size (shares)=613.3600
+      initialValue=$601.02 | currentValue=$610.29 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  57. Will the U.K. join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9798 | curPrice=0.9865 | size (shares)=31.9100
+      initialValue=$31.27 | currentValue=$31.48 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  58. Will the US officially declare war on Iran by March 31, 2026?
+      outcome=No | entry (avgPrice)=0.9813 | curPrice=0.9985 | size (shares)=77,535.0006
+      initialValue=$76,083.78 | currentValue=$77,418.70 | slug=will-the-us-officially-declare-war-on-iran-by
+  59. Will Thomas Massie be the Republican nominee for KY-04?
+      outcome=Yes | entry (avgPrice)=0.7800 | curPrice=0.6450 | size (shares)=17.0300
+      initialValue=$13.28 | currentValue=$10.98 | slug=ky-04-republican-primary-winner
+  60. Will Tim Walz resign by June 30?
+      outcome=No | entry (avgPrice)=0.8200 | curPrice=0.9725 | size (shares)=713.8467
+      initialValue=$585.35 | currentValue=$694.22 | slug=will-tim-walz-resign-by
+  61. Will Trump pardon Ghislaine Maxwell by end of 2026?
+      outcome=No | entry (avgPrice)=0.8000 | curPrice=0.9300 | size (shares)=861.9700
+      initialValue=$689.58 | currentValue=$801.63 | slug=will-trump-pardon-ghislaine-maxwell
+  62. Will Trump talk to Mojtaba Khamenei by March 31?
+      outcome=No | entry (avgPrice)=0.9737 | curPrice=0.9930 | size (shares)=14,337.7400
+      initialValue=$13,960.39 | currentValue=$14,237.38 | slug=will-trump-talk-to-mojtaba-khamenei-by-march-31
+  63. Will Ukraine join the Board of Peace?
+      outcome=No | entry (avgPrice)=0.9697 | curPrice=0.9995 | size (shares)=178.9100
+      initialValue=$173.49 | currentValue=$178.82 | slug=which-countries-will-join-the-board-of-peace-by-march-31
+  64. Zelenskyy out as Ukraine president by end of 2026?
+      outcome=No | entry (avgPrice)=0.5891 | curPrice=0.8000 | size (shares)=16,601.6589
+      initialValue=$9,779.52 | currentValue=$13,281.33 | slug=zelenskyy-out-as-ukraine-president-before-2027
+
+--- Recency ---
+Most recent activity timestamp: 2026-03-28 09:26 UTC
+
+--- Top 5 closed positions by realized P/L ---
+  1. $53,110.78 — Will Biden announce resignation by July 31?
+      slug=will-biden-resign-by-july-31 | outcome=No
+  2. $49,053.36 — Will Kamala Harris win the 2024 Democratic Presidential Nomination?
+      slug=democratic-nominee-2024 | outcome=Yes
+  3. $47,644.48 — Matt Gaetz confirmed as Attorney General?
+      slug=which-trump-picks-will-be-confirmed | outcome=No
+  4. $47,548.42 — Will Israel invade Lebanon in September?
+      slug=will-israel-invade-lebanon-in-september | outcome=No
+  5. $46,679.95 — Will a Democrat win Arizona US Senate Election?
+      slug=arizona-us-senate-election-winner | outcome=Yes
+
+========================================================================
+

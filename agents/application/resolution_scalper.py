@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from agents.polymarket.polymarket import Polymarket
 from agents.polymarket.gamma import GammaMarketClient
 from agents.application.risk_manager import RiskConfig, PortfolioRiskManager
+from agents.application.outcome_verifier import OutcomeVerifier, VerificationResult
 from agents.connectors.telegram_alerts import TelegramAlerter
 
 load_dotenv()
@@ -56,17 +57,27 @@ logger = logging.getLogger(__name__)
 
 class ScalpConfig(BaseModel):
     """Configuration for resolution scalping"""
-    min_price_threshold: float = Field(default=0.88, description="Min price to consider (e.g., 0.88 = 88%)")
+    min_price_threshold: float = Field(default=0.90, description="Min price for verified markets (Tier 1)")
+    min_price_unverified: float = Field(default=0.95, description="Min price for unverified markets (Tier 2)")
     max_price_threshold: float = Field(default=0.98, description="Max price (zero fees make thin margins viable)")
     min_profit_percent: float = Field(default=0.015, description="Min profit percent (1.5% — viable with zero fees)")
     hours_to_resolution: int = Field(default=24, description="Only consider markets resolving within N hours")
     confidence_threshold: float = Field(default=0.60, description="Min confidence that outcome is known")
     max_spread: float = Field(default=0.03, description="Max order book spread to accept")
     max_price_drift: float = Field(default=0.02, description="Max price drift from scan to execution")
-    max_trade_percent: float = Field(default=0.15, description="Max % of cash balance per scalp trade (15%)")
+    # Tier 1 (verified) position sizing
+    max_trade_percent_verified: float = Field(default=0.20, description="Max % of cash balance for verified trades (20%)")
+    max_trade_size_verified: float = Field(default=10.0, description="Max trade size for verified markets")
+    # Tier 2 (unverified) position sizing
+    max_trade_percent_unverified: float = Field(default=0.10, description="Max % of cash balance for unverified trades (10%)")
+    max_trade_size_unverified: float = Field(default=5.0, description="Max trade size for unverified markets")
     min_trade_size: float = Field(default=1.0, description="Minimum trade size in USDC")
-    max_trade_size: float = Field(default=50.0, description="Maximum trade size in USDC")
+    max_trade_size: float = Field(default=50.0, description="Maximum trade size in USDC (legacy)")
     order_timeout: float = Field(default=15.0, description="Cancel unfilled limit orders after N seconds")
+    max_trades_per_cycle: int = Field(default=3, description="Max trades to execute per scan cycle")
+    # Long-dated market rejection
+    max_hours_until_resolution: float = Field(default=48.0, description="Reject markets resolving more than 48h in future")
+    max_hours_past_resolution: float = Field(default=72.0, description="Reject markets >72h past endDate (stuck)")
     # 15-min BTC focus: only trade short-timeframe BTC resolution markets (for testing before all-in)
     btc_15min_only: bool = Field(default=False, description="Restrict to 15-min style BTC resolution markets")
     min_minutes_to_resolution: float = Field(default=2.0, description="Min minutes until resolution (avoid too late)")
@@ -89,6 +100,7 @@ class ScalpOpportunity:
     timestamp: str
     volume_24h: float = 0.0
     liquidity: float = 0.0
+    verified: bool = False  # True if outcome independently verified (Tier 1)
 
 
 @dataclass
@@ -141,6 +153,9 @@ class ResolutionScalper:
 
         # Shared risk manager
         self.risk_manager = PortfolioRiskManager(self.polymarket, self.risk_config)
+
+        # Outcome verifier for independent verification
+        self.verifier = OutcomeVerifier()
 
         # Telegram alerts
         self.telegram = TelegramAlerter()
@@ -264,15 +279,17 @@ class ResolutionScalper:
                     opportunities.append(opp)
 
             if opportunities:
-                # Sort by profit * confidence
+                # Sort: verified first, then by profit * confidence
                 opportunities.sort(
-                    key=lambda x: x.potential_profit_percent * x.confidence_score,
+                    key=lambda x: (x.verified, x.potential_profit_percent * x.confidence_score),
                     reverse=True
                 )
 
-                logger.info(f"Found {len(opportunities)} scalping opportunities!")
+                verified_count = sum(1 for o in opportunities if o.verified)
+                logger.info(f"Found {len(opportunities)} scalping opportunities ({verified_count} verified)!")
                 for opp in opportunities[:5]:
-                    logger.info(f"  - {opp.question[:50]}...")
+                    tier = "T1-VERIFIED" if opp.verified else "T2-unverified"
+                    logger.info(f"  - [{tier}] {opp.question[:50]}...")
                     logger.info(f"    Side: {opp.recommended_side} @ ${opp.current_price:.2f} | Profit: {opp.potential_profit_percent:.1%}")
                     logger.info(f"    Reason: {opp.reason}")
             else:
@@ -283,6 +300,20 @@ class ResolutionScalper:
 
         return opportunities
 
+    # Sports/esports keywords — these markets resolve to team names (not YES/NO)
+    # and have unpredictable outcomes even at 95%+ prices. Ban entirely.
+    SPORTS_BLACKLIST = [
+        'game', 'match', 'championship', 'super bowl', 'world series',
+        'nba', 'nfl', 'mlb', 'nhl', 'ufc', 'boxing', 'premier league',
+        'serie a', 'la liga', 'bundesliga', 'ligue 1',
+        'score', 'goals', 'points', 'touchdown', 'first blood',
+        'counter-strike', 'esports', 'map winner', 'valorant',
+        'dota', 'league of legends', 'lol:', 'cs2:', 'csgo',
+        ' vs ', ' vs. ', 'bo3', 'bo5', 'playoff', 'playoffs',
+        'hoosiers', 'terrapins', 'bruins', 'racers', 'friars',
+        'scarlet knights', 'toreros', 'dons',
+    ]
+
     def analyze_market(self, market: dict) -> Optional[ScalpOpportunity]:
         """Analyze a market for scalping opportunity with volume/liquidity filters."""
         try:
@@ -290,9 +321,17 @@ class ResolutionScalper:
             if not question:
                 return None
 
+            # Reject sports/esports markets entirely — they resolve to team names
+            # and lose $5 per wrong bet vs $0.20 per win. Not worth the risk.
+            q_lower = question.lower()
+            if any(kw in q_lower for kw in self.SPORTS_BLACKLIST):
+                return None
+
             market_id = str(market.get('id', ''))
 
-            # Fix 5: Check cooldown
+            # Check blacklist and cooldown
+            if self.risk_manager.is_market_blacklisted(market_id):
+                return None
             if self.risk_manager.is_market_on_cooldown(market_id):
                 return None
 
@@ -350,9 +389,12 @@ class ResolutionScalper:
             if len(clob_token_ids) != 2:
                 return None
 
-            # Check if either side is in our target range (0.90-0.99)
-            yes_in_range = self.scalp_config.min_price_threshold <= yes_price <= self.scalp_config.max_price_threshold
-            no_in_range = self.scalp_config.min_price_threshold <= no_price <= self.scalp_config.max_price_threshold
+            # Use the lower threshold (verified) for initial filtering — we tighten later
+            min_price = self.scalp_config.min_price_threshold  # 0.90 for verified
+
+            # Check if either side is in our target range
+            yes_in_range = min_price <= yes_price <= self.scalp_config.max_price_threshold
+            no_in_range = min_price <= no_price <= self.scalp_config.max_price_threshold
 
             if not yes_in_range and not no_in_range:
                 return None
@@ -376,8 +418,25 @@ class ResolutionScalper:
             if profit_percent < self.scalp_config.min_profit_percent:
                 return None
 
-            # Fix 3: Simplified confidence assessment (no circular price-as-confidence)
-            confidence, reason = self.assess_outcome_confidence(market, side, price)
+            # Outcome verification: check if we can independently confirm the result
+            verification = self.verifier.verify(question, market)
+            is_verified = verification in (VerificationResult.VERIFIED_YES, VerificationResult.VERIFIED_NO)
+
+            # If verified and outcome contradicts our bet side, REJECT
+            if verification == VerificationResult.VERIFIED_YES and side == "NO":
+                logger.info(f"REJECTED (verified opposite): {question[:50]} — verified YES but would bet NO")
+                return None
+            if verification == VerificationResult.VERIFIED_NO and side == "YES":
+                logger.info(f"REJECTED (verified opposite): {question[:50]} — verified NO but would bet YES")
+                return None
+
+            # Apply tier-specific price threshold
+            if not is_verified and price < self.scalp_config.min_price_unverified:
+                # Unverified market below Tier 2 threshold (0.95)
+                return None
+
+            # Confidence assessment with verification tier
+            confidence, reason = self.assess_outcome_confidence(market, side, price, is_verified)
 
             if confidence < self.scalp_config.confidence_threshold:
                 return None
@@ -409,88 +468,107 @@ class ResolutionScalper:
                 token_id=token_id,
                 timestamp=datetime.now().isoformat(),
                 volume_24h=volume_24h,
-                liquidity=liquidity
+                liquidity=liquidity,
+                verified=is_verified,
             )
 
         except Exception as e:
             logger.debug(f"Error analyzing market: {e}")
             return None
 
-    def assess_outcome_confidence(self, market: dict, side: str, price: float) -> tuple[float, str]:
+    def assess_outcome_confidence(self, market: dict, side: str, price: float, is_verified: bool = False) -> tuple[float, str]:
         """
-        Price-trust confidence model.
+        Two-tier confidence model.
 
-        Key insight: the market price IS the confidence signal. A market at $0.95
-        reflects thousands of traders' consensus that the outcome has a 95% chance.
-        We trust the crowd's assessment and layer on resolution timing + event type.
+        Tier 1 (Verified): Outcome independently confirmed via external API.
+        - Confidence = 0.95 (near-certain)
+        - Min price: 0.90
 
-        Scoring:
-        - Price-as-confidence (primary):  0.88→0.30, 0.90→0.40, 0.93→0.55, 0.95→0.65, 0.97→0.75
-        - Resolution proximity (secondary): past→+0.20, <30min→+0.15, <2h→+0.10, <6h→+0.05, <24h→+0.02
-        - Event type (bonus):              sports/election→+0.10, financial→+0.08
-        - Past-tense keywords (minor):     strong→+0.08, weak→+0.03
+        Tier 2 (Unverified): Cannot independently confirm outcome.
+        - Price-trust model with stricter thresholds
+        - Min price: 0.95
+        - Requires endDate passed by 6+ hours OR strong past-tense keywords
+        - Resolution proximity and event type bonuses
+
+        Long-dated market rejection:
+        - endDate > 48h in future → REJECT
+        - endDate > 72h past and still unresolved → REJECT
         """
         question = market.get('question', '').lower()
         description = market.get('description', '').lower()
         end_date_str = market.get('endDate', '')
 
-        confidence = 0.0
-        reasons = []
-
-        # ── Factor 1 (PRIMARY): Price-as-confidence ──
-        # The market price reflects collective wisdom of all participants.
-        # Higher price = more certain outcome.
-        if price >= 0.97:
-            confidence += 0.75
-            reasons.append(f"Price ${price:.2f} (very high conviction)")
-        elif price >= 0.95:
-            confidence += 0.65
-            reasons.append(f"Price ${price:.2f} (high conviction)")
-        elif price >= 0.93:
-            confidence += 0.55
-            reasons.append(f"Price ${price:.2f} (moderate-high conviction)")
-        elif price >= 0.90:
-            confidence += 0.40
-            reasons.append(f"Price ${price:.2f} (moderate conviction)")
-        elif price >= 0.88:
-            confidence += 0.30
-            reasons.append(f"Price ${price:.2f} (lower conviction)")
-        else:
-            confidence += 0.20
-            reasons.append(f"Price ${price:.2f} (low conviction)")
-
-        # ── Factor 2: Resolution proximity ──
+        # ── Parse resolution timing (shared by both tiers) ──
         hours_to_resolution = None
         if end_date_str:
             try:
                 end_date_str_clean = end_date_str.replace('Z', '+00:00')
                 end_date = datetime.fromisoformat(end_date_str_clean)
                 now = datetime.now(end_date.tzinfo) if end_date.tzinfo else datetime.now()
-
-                time_to_resolution = end_date - now
-                hours_to_resolution = time_to_resolution.total_seconds() / 3600
-
-                if hours_to_resolution < 0:
-                    confidence += 0.20
-                    reasons.append("Past end date — awaiting resolution")
-                elif hours_to_resolution <= 0.5:
-                    confidence += 0.15
-                    reasons.append("Resolves within 30 minutes")
-                elif hours_to_resolution <= 2:
-                    confidence += 0.10
-                    reasons.append("Resolves within 2 hours")
-                elif hours_to_resolution <= 6:
-                    confidence += 0.05
-                    reasons.append("Resolves within 6 hours")
-                elif hours_to_resolution <= 24:
-                    confidence += 0.02
-                    reasons.append("Resolves within 24 hours")
-                else:
-                    return 0.0, f"Resolves in {hours_to_resolution:.0f}h — too far out"
+                hours_to_resolution = (end_date - now).total_seconds() / 3600
             except Exception:
-                return 0.0, "Cannot parse resolution date"
+                if not is_verified:
+                    return 0.0, "Cannot parse resolution date"
 
-        # ── Factor 3: Event type ──
+        # ── Long-dated market rejection (applies to both tiers) ──
+        if hours_to_resolution is not None:
+            if hours_to_resolution > self.scalp_config.max_hours_until_resolution:
+                return 0.0, f"Resolves in {hours_to_resolution:.0f}h — too far out (max {self.scalp_config.max_hours_until_resolution:.0f}h)"
+            if hours_to_resolution < -self.scalp_config.max_hours_past_resolution:
+                return 0.0, f"EndDate was {abs(hours_to_resolution):.0f}h ago — market appears stuck"
+
+        # ══════════════════════════════════════════════════
+        # TIER 1: Verified markets — outcome independently confirmed
+        # ══════════════════════════════════════════════════
+        if is_verified:
+            reasons = [f"VERIFIED outcome (price ${price:.2f})"]
+            if hours_to_resolution is not None and hours_to_resolution < 0:
+                reasons.append("Past end date")
+            return 0.95, "; ".join(reasons)
+
+        # ══════════════════════════════════════════════════
+        # TIER 2: Unverified markets — stricter price-trust model
+        # ══════════════════════════════════════════════════
+        confidence = 0.0
+        reasons = []
+
+        # Factor 1 (PRIMARY): Price-as-confidence (stricter thresholds)
+        if price >= 0.97:
+            confidence += 0.75
+            reasons.append(f"Price ${price:.2f} (very high conviction)")
+        elif price >= 0.95:
+            confidence += 0.65
+            reasons.append(f"Price ${price:.2f} (high conviction)")
+        else:
+            # Below 0.95 unverified → not enough confidence
+            return 0.0, f"Unverified market at ${price:.2f} — below Tier 2 minimum 0.95"
+
+        # Factor 2: Resolution proximity
+        if hours_to_resolution is not None:
+            if hours_to_resolution < -6:
+                # Past endDate by 6+ hours — strong signal event has concluded
+                confidence += 0.20
+                reasons.append(f"EndDate passed {abs(hours_to_resolution):.0f}h ago")
+            elif hours_to_resolution < 0:
+                confidence += 0.10
+                reasons.append("Past end date — recently")
+            elif hours_to_resolution <= 0.5:
+                confidence += 0.10
+                reasons.append("Resolves within 30 minutes")
+            elif hours_to_resolution <= 2:
+                confidence += 0.07
+                reasons.append("Resolves within 2 hours")
+            elif hours_to_resolution <= 6:
+                confidence += 0.03
+                reasons.append("Resolves within 6 hours")
+            elif hours_to_resolution <= 24:
+                confidence += 0.01
+                reasons.append("Resolves within 24 hours")
+            else:
+                confidence += 0.0
+                reasons.append(f"Resolves in {hours_to_resolution:.0f}h")
+
+        # Factor 3: Event type
         sports_keywords = [
             'game', 'match', 'championship', 'super bowl', 'world series',
             'nba', 'nfl', 'mlb', 'nhl', 'ufc', 'boxing', 'premier league',
@@ -518,7 +596,7 @@ class ResolutionScalper:
             confidence += 0.08
             reasons.append("Financial (verifiable at close)")
 
-        # ── Factor 4: Past-tense keywords (minor bonus) ──
+        # Factor 4: Past-tense keywords
         strong_past_indicators = [
             'did ', 'won ', 'lost ', 'defeated ', 'beat ',
             'signed ', 'passed ', 'announced ', 'fired ',
@@ -553,18 +631,30 @@ class ResolutionScalper:
         if self.risk_manager.is_market_on_cooldown(market_id):
             logger.info(f"Market {market_id} on cooldown, skipping")
             return None
+        if self.risk_manager.is_market_blacklisted(market_id):
+            logger.debug(f"Market {market_id} permanently blacklisted, skipping")
+            return None
 
-        # Position sizing: fixed fraction of cash balance
+        # Tier-based position sizing
         balance = self.risk_manager.get_balance()
-        trade_size = balance * self.scalp_config.max_trade_percent
-        trade_size = min(trade_size, self.scalp_config.max_trade_size)
+        if opportunity.verified:
+            trade_pct = self.scalp_config.max_trade_percent_verified
+            max_size = self.scalp_config.max_trade_size_verified
+            tier_label = "Tier 1 (verified)"
+        else:
+            trade_pct = self.scalp_config.max_trade_percent_unverified
+            max_size = self.scalp_config.max_trade_size_unverified
+            tier_label = "Tier 2 (unverified)"
+
+        trade_size = balance * trade_pct
+        trade_size = min(trade_size, max_size)
         trade_size = max(trade_size, self.scalp_config.min_trade_size)
 
         if trade_size > balance:
             logger.warning(f"Insufficient balance: ${balance:.2f} < min trade ${self.scalp_config.min_trade_size}")
             return None
 
-        logger.info(f"Trade size: ${trade_size:.2f} ({self.scalp_config.max_trade_percent:.0%} of ${balance:.2f})")
+        logger.info(f"Trade size: ${trade_size:.2f} ({trade_pct:.0%} of ${balance:.2f}) — {tier_label}")
 
         # Check position count limit
         can_trade, reason = self.risk_manager.can_open_position(trade_size)
@@ -579,7 +669,7 @@ class ResolutionScalper:
 
         if ob_info is None:
             logger.warning("Cannot read order book, skipping trade")
-            self.risk_manager.record_failed_market(market_id)
+            self.risk_manager.record_failed_market(market_id, retryable=True)
             return None
 
         if ob_info.spread > self.scalp_config.max_spread:
@@ -681,22 +771,26 @@ class ResolutionScalper:
 
                 if "balance" in error_msg or "allowance" in error_msg or "insufficient" in error_msg:
                     failure_reason = "Insufficient balance or allowance"
+                    retryable = False
                     self.risk_manager.get_balance(force_refresh=True)
-                    self.risk_manager.record_failed_market(market_id)
                 elif "no match" in error_msg:
                     failure_reason = "No liquidity - price moved or taken"
+                    retryable = False  # No liquidity won't magically appear
                 elif "size" in error_msg or "minimum" in error_msg:
                     failure_reason = "Order size below minimum"
+                    retryable = False
                 elif "timeout" in error_msg or "timed out" in error_msg:
                     failure_reason = "Network timeout"
+                    retryable = True  # Network issues are transient
                 else:
                     failure_reason = str(e)
+                    retryable = True
 
                 logger.error(f"Trade execution failed: {failure_reason}")
                 trade.status = "FAILED"
                 trade.reason = failure_reason
                 self.failed_trades += 1
-                self.risk_manager.record_failed_market(market_id)
+                self.risk_manager.record_failed_market(market_id, retryable=retryable)
 
         self.total_trades += 1
         self.trade_history.append(trade)
@@ -705,14 +799,15 @@ class ResolutionScalper:
         # Send Telegram alert only for successful fills (not routine failures)
         if trade.status in ("FILLED", "DRY_RUN"):
             try:
+                tier_emoji = "🔍" if opportunity.verified else "⏳"
                 self.telegram.send_message_sync(
-                    f"{'[DRY] ' if self.dry_run else ''}<b>SCALP {trade.status}</b>\n\n"
-                    f"{opportunity.question[:50]}...\n"
-                    f"BUY {opportunity.recommended_side} @ ${opportunity.current_price:.4f}\n"
-                    f"Amount: ${trade_size:.2f}\n"
-                    f"Expected Profit: ${expected_profit:.2f} (zero fees!)\n"
-                    f"Confidence: {opportunity.confidence_score:.0%}\n"
-                    f"Spread: ${ob_info.spread:.4f}\n"
+                    f"{'[DRY] ' if self.dry_run else ''}{tier_emoji} <b>SCALP {trade.status}</b>\n\n"
+                    f"📋 {opportunity.question[:50]}...\n"
+                    f"💰 BUY {opportunity.recommended_side} @ ${opportunity.current_price:.4f}\n"
+                    f"💵 Amount: ${trade_size:.2f}\n"
+                    f"📈 Expected Profit: ${expected_profit:.2f} (zero fees!)\n"
+                    f"🎯 Confidence: {opportunity.confidence_score:.0%} {'(verified)' if opportunity.verified else ''}\n"
+                    f"📊 Spread: ${ob_info.spread:.4f}\n"
                 )
             except Exception as e:
                 logger.warning(f"Failed to send Telegram alert: {e}")
@@ -835,13 +930,14 @@ class ResolutionScalper:
             total_resolved = self.verified_wins + self.verified_losses
             win_rate = self.verified_wins / total_resolved * 100 if total_resolved > 0 else 0
             try:
+                result_emoji = "✅" if won else "❌"
                 self.telegram.send_message_sync(
-                    f"{'[DRY] ' if self.dry_run else ''}<b>RESOLUTION {'WIN' if won else 'LOSS'}</b>\n\n"
-                    f"{trade.question[:50]}\n"
-                    f"Bet: {trade.side} | Result: {resolved_side}\n"
-                    f"P&L: ${trade.actual_profit:+.2f}\n\n"
-                    f"Score: {self.verified_wins}W/{self.verified_losses}L ({win_rate:.0f}%)\n"
-                    f"Verified P&L: ${self.verified_pnl:+.2f}\n"
+                    f"{'[DRY] ' if self.dry_run else ''}{result_emoji} <b>RESOLUTION {'WIN' if won else 'LOSS'}</b>\n\n"
+                    f"📋 {trade.question[:50]}\n"
+                    f"🎲 Bet: {trade.side} | Result: {resolved_side}\n"
+                    f"💰 P&L: ${trade.actual_profit:+.2f}\n\n"
+                    f"📊 Score: {self.verified_wins}W/{self.verified_losses}L ({win_rate:.0f}%)\n"
+                    f"💵 Session P&L: ${self.verified_pnl:+.2f}\n"
                 )
             except Exception:
                 pass
@@ -952,10 +1048,20 @@ class ResolutionScalper:
                     # Scan for opportunities
                     opportunities = self.scan_for_opportunities()
 
-                    # Execute best opportunity
+                    # Execute up to max_trades_per_cycle (prioritized by verified + profit*confidence)
                     if opportunities:
-                        best = opportunities[0]  # Already sorted by profit * confidence
-                        self.execute_scalp(best)
+                        trades_this_cycle = 0
+                        for opp in opportunities:
+                            if trades_this_cycle >= self.scalp_config.max_trades_per_cycle:
+                                break
+                            result = self.execute_scalp(opp)
+                            if result and result.status in ("FILLED", "DRY_RUN"):
+                                trades_this_cycle += 1
+                                # Re-check balance for next trade
+                                self.current_balance = self.get_wallet_balance()
+                                if self.current_balance < self.scalp_config.min_trade_size:
+                                    logger.info("Insufficient balance for more trades this cycle")
+                                    break
                 else:
                     logger.info("Waiting for positions to resolve and free up capital...")
 

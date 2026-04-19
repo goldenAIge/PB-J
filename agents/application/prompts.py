@@ -113,8 +113,8 @@ class Prompter:
         return f"""
         You are a Superforecaster tasked with correctly predicting the likelihood of events.
         Use the following systematic process to develop an accurate prediction for the following
-        question=`{question}` and description=`{description}` combination. 
-        
+        question=`{question}` and description=`{description}` combination.
+
         Here are the key steps to use in your analysis:
 
         1. Breaking Down the Question:
@@ -124,7 +124,7 @@ class Prompter:
             - Seek out diverse sources of information.
             - Look for both quantitative data and qualitative insights.
             - Stay updated on relevant news and expert analyses.
-        3. Considere Base Rates:
+        3. Consider Base Rates:
             - Use statistical baselines or historical averages as a starting point.
             - Compare the current situation to similar past events to establish a benchmark probability.
         4. Identify and Evaluate Factors:
@@ -135,12 +135,13 @@ class Prompter:
             - Express predictions in terms of probabilities rather than certainties.
             - Assign likelihoods to different outcomes and avoid binary thinking.
             - Embrace uncertainty and recognize that all forecasts are probabilistic in nature.
-        
-        Given these steps produce a statement on the probability of outcome=`{outcome}` occuring.
 
-        Give your response in the following format:
+        Given these steps, produce a probability estimate for outcome=`{outcome}` occurring.
 
-        I believe {question} has a likelihood `{float}` for outcome of `{str}`.
+        You MUST end your response with exactly this format on its own line:
+        PROBABILITY: 0.XX
+
+        where 0.XX is your probability estimate between 0.00 and 1.00.
         """
 
     def one_best_trade(

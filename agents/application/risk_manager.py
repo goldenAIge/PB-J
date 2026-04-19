@@ -79,6 +79,12 @@ class PortfolioRiskManager:
         self._cooldowns: dict[str, float] = {}
         self._cooldown_duration: float = 600  # 10 minutes
 
+        # Permanent session blacklist: market_id -> failure_count
+        # After 2 non-retryable failures, market is blacklisted for the session
+        self._failure_counts: dict[str, int] = {}
+        self._blacklisted: set[str] = set()
+        self._blacklist_threshold: int = 2
+
         # Position tracking
         self._position_count: int = 0
         self._total_exposure: float = 0.0
@@ -237,10 +243,23 @@ class PortfolioRiskManager:
         logger.debug(f"Market {market_id} on cooldown for {remaining:.0f}s more")
         return True
 
-    def record_failed_market(self, market_id: str) -> None:
-        """Put a market on cooldown after a failure."""
+    def record_failed_market(self, market_id: str, retryable: bool = True) -> None:
+        """Put a market on cooldown after a failure. Non-retryable failures count toward permanent blacklist."""
         self._cooldowns[market_id] = time.time() + self._cooldown_duration
+
+        if not retryable:
+            self._failure_counts[market_id] = self._failure_counts.get(market_id, 0) + 1
+            count = self._failure_counts[market_id]
+            if count >= self._blacklist_threshold:
+                self._blacklisted.add(market_id)
+                logger.info(f"Market {market_id} BLACKLISTED after {count} non-retryable failures")
+                return
+
         logger.info(f"Market {market_id} on cooldown for {self._cooldown_duration}s")
+
+    def is_market_blacklisted(self, market_id: str) -> bool:
+        """Check if a market is permanently blacklisted for this session."""
+        return market_id in self._blacklisted
 
     def calculate_position_size(self, edge: float, price: float) -> float:
         """
