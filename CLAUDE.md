@@ -276,6 +276,17 @@ The wallet stalker can now successfully execute exit trades when scottilicious o
 
 **requirements.txt synced** with actual venv state. Old file was a fossil from initial project setup (172 lines, 88 packages not even installed). New file reflects the lean production venv (99 packages). Key version jumps: `py_clob_client` 0.17.5→0.34.6, `web3` 6.11→7.14, `openai` 1.37→2.29, `websockets` 12→15.
 
+### V2 SDK Findings from Connectivity Test
+
+- V2 CLOB is live and reachable at `clob-v2.polymarket.com`
+- Existing wallet private key + API credentials work on V2 (no re-auth needed)
+- V2 SDK has built-in auto-retry on transient errors (verified by observing retry during API key derivation)
+- Maker fee on V2 is 0 bps (same as V1) — no economics change for maker orders
+- **BREAKING:** `get_balance_allowance()` requires explicit `BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)` in V2 — V1 defaulted this. Must update all calls during bot migration.
+- Test market (US/Iran nuclear deal 2027, token_id `10293...7216`) has `tick_size=0.01`
+- V2 collateral balance is `0` until USDC is wrapped to pUSD via `CollateralOnramp.wrap()`
+- V2 allowances map shows three exchange contracts: `exchange_v2` (`0xE111...996B`), `neg_risk_adapter` (`0xd91E...1296`), `neg_risk_exchange_v2` (`0xe222...0F59`)
+
 ## Strategy Research
 
 Prefer backtests, paper/dry-run mode, or small test orders. Avoid advising large live risk without explicit request. Reference `agents/application/backtest.py` for the backtest harness and `docs/STRATEGY_RESEARCH.md` for research notes.
