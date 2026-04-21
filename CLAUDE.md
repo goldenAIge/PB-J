@@ -287,6 +287,15 @@ The wallet stalker can now successfully execute exit trades when scottilicious o
 - V2 collateral balance is `0` until USDC is wrapped to pUSD via `CollateralOnramp.wrap()`
 - V2 allowances map shows three exchange contracts: `exchange_v2` (`0xE111...996B`), `neg_risk_adapter` (`0xd91E...1296`), `neg_risk_exchange_v2` (`0xe222...0F59`)
 
+### 2026-04-21: On-chain V2 Prep Complete
+
+- Wrapped 10 USDC.e → 10 pUSD via CollateralOnramp (`tx: 0xf0cecf8f334a0806cdb3e85d331ef49ec13833b4f34c25f3ecb219bfbef48df1`)
+- Approved pUSD + CTF on `exchange_v2` and `neg_risk_exchange_v2`
+- Approved pUSD on `neg_risk_adapter` (CTF already carried from V1 April 13)
+- Total on-chain cost: ~$0.027 gas across 7 transactions
+- Wallet state at completion: 245.90 USDC.e, 10 pUSD, all V2 approvals set
+- Remaining USDC.e (~245) can be wrapped closer to April 28 once V2 bot code is tested
+
 ## Strategy Research
 
 Prefer backtests, paper/dry-run mode, or small test orders. Avoid advising large live risk without explicit request. Reference `agents/application/backtest.py` for the backtest harness and `docs/STRATEGY_RESEARCH.md` for research notes.
