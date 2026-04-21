@@ -49,6 +49,27 @@ CHAIN_ID = 137
 # pUSD is the V2 collateral token (replaces USDC.e from V1)
 PUSD_ADDRESS = "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB"
 
+# CTF (Conditional Tokens Framework) contract — same address in V1 and V2
+CTF_ADDRESS = Web3.to_checksum_address("0x4D97DCd97eC945f40cF65F87097ACe5EA0476045")
+
+# V2 exchange contracts (approvals must be set via scripts/python/set_v2_approvals.py)
+EXCHANGE_V2 = Web3.to_checksum_address("0xE111180000d2663C0091e4f400237545B87B996B")
+NEG_RISK_EXCHANGE_V2 = Web3.to_checksum_address("0xe2222d279d744050d28e00520010520000310F59")
+
+# Minimal ERC-1155 ABI for approval checks (read-only — never sets approvals)
+_ERC1155_CHECK_ABI = [
+    {
+        "inputs": [
+            {"internalType": "address", "name": "account", "type": "address"},
+            {"internalType": "address", "name": "operator", "type": "address"},
+        ],
+        "name": "isApprovedForAll",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+]
+
 # Minimal ERC-20 ABI for balance queries
 _ERC20_BALANCE_ABI = [
     {
@@ -113,6 +134,10 @@ class Polymarket:
             abi=_ERC20_BALANCE_ABI,
         )
 
+        # CTF contract for approval checks
+        self.ctf = self.web3.eth.contract(address=CTF_ADDRESS, abi=_ERC1155_CHECK_ABI)
+        self._sell_approval_verified = False
+
     def _init_api_keys(self, existing_creds: ApiCreds = None) -> None:
         """Derive or reuse API credentials for L2 auth."""
         if existing_creds:
@@ -175,6 +200,57 @@ class Polymarket:
             asset_type=AssetType.COLLATERAL if asset_type == "COLLATERAL" else AssetType.CONDITIONAL,
         )
         return self.client.get_balance_allowance(params)
+
+    # --- Approval verification ---
+
+    def ensure_sell_approval(self, neg_risk: bool = False) -> bool:
+        """Verify V2 CTF approvals are set on-chain. Does NOT set them.
+
+        V2 approvals must be set via scripts/python/set_v2_approvals.py before
+        the bot can sell positions. This method verifies they exist and raises
+        RuntimeError if any are missing.
+
+        Args:
+            neg_risk: Accepted for caller compatibility but ignored — both
+                      exchanges are always checked.
+
+        Returns:
+            True if all approvals verified.
+
+        Raises:
+            RuntimeError: If any CTF approval is missing.
+        """
+        if self._sell_approval_verified:
+            return True
+
+        wallet = Web3.to_checksum_address(self.get_address_for_private_key())
+        exchanges = [
+            ("exchange_v2", EXCHANGE_V2),
+            ("neg_risk_exchange_v2", NEG_RISK_EXCHANGE_V2),
+        ]
+
+        missing = []
+        for label, addr in exchanges:
+            approved = self.ctf.functions.isApprovedForAll(wallet, addr).call()
+            if not approved:
+                missing.append(f"{label} ({addr})")
+
+        if missing:
+            logger.error("=" * 60)
+            logger.error("  V2 CTF APPROVALS MISSING — CANNOT SELL")
+            for m in missing:
+                logger.error(f"    - {m}")
+            logger.error("  Fix: PYTHONPATH='.' python3 scripts/python/set_v2_approvals.py --execute")
+            logger.error("  Then restart the bot.")
+            logger.error("=" * 60)
+            raise RuntimeError(
+                f"V2 approvals missing for {', '.join(missing)}. "
+                f"Run scripts/python/set_v2_approvals.py --execute and restart the bot."
+            )
+
+        logger.info("V2 sell approvals verified (CTF approved for both exchanges)")
+        self._sell_approval_verified = True
+        return True
 
     # --- Write operations (Layer 2) ---
 

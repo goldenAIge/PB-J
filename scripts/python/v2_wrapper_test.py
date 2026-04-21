@@ -171,6 +171,32 @@ def test_verify_cancelled():
     return resp
 
 
+# --- Approval verification tests ---
+
+
+def test_ensure_sell_approval():
+    """Test 10: ensure_sell_approval returns True (approvals set Apr 21)."""
+    result = poly.ensure_sell_approval()
+    print(f"  Result: {result}")
+    assert result is True, f"Expected True, got {result}"
+    return result
+
+
+def test_approval_caching():
+    """Test 11: second call uses cache (instant, no on-chain read)."""
+    import time
+    assert poly._sell_approval_verified, "Cache flag not set after test 10"
+    start = time.perf_counter()
+    result = poly.ensure_sell_approval()
+    elapsed = time.perf_counter() - start
+    print(f"  Result: {result}")
+    print(f"  Elapsed: {elapsed*1000:.1f}ms")
+    print(f"  Cache flag: {poly._sell_approval_verified}")
+    assert result is True, f"Expected True, got {result}"
+    assert elapsed < 0.1, f"Cached call took {elapsed:.3f}s — cache not working"
+    return result
+
+
 # --- Run all ---
 
 if __name__ == "__main__":
@@ -214,6 +240,20 @@ if __name__ == "__main__":
             print(f"{'='*60}")
             print(f"SKIPPED: {name} (depends on test 6)")
             results.append((name, None))
+
+    # Approval verification tests (independent of write tests)
+    approval_tests = [
+        ("10) ensure_sell_approval", test_ensure_sell_approval),
+        ("11) Approval caching", test_approval_caching),
+    ]
+    for name, fn in approval_tests:
+        ok = run_test(name, fn)
+        results.append((name, ok))
+        if name.startswith("10") and not ok:
+            print(f"\n{'!'*60}")
+            print(f"  WARNING: V2 APPROVALS MAY NEED RE-SETTING")
+            print(f"  Run: PYTHONPATH='.' python3 scripts/python/set_v2_approvals.py --execute")
+            print(f"{'!'*60}")
 
     print(f"\n{'='*60}")
     passed = sum(1 for _, ok in results if ok is True)
