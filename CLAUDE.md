@@ -308,6 +308,17 @@ The wallet stalker can now successfully execute exit trades when scottilicious o
 - Clean termination, zero errors, zero warnings
 - Conclusion: the crypto latency bot is functionally ready for V2. On cutover day, the one-line import change is all that's needed (plus production host swap if required).
 
+### Wallet Stalker V2 End-to-End Test — PASSED (2026-04-21)
+
+- Ran stop-test-restart sequence to safely test against the shared `wallet_monitor_positions.json` state
+- Stopped V1 wallet monitor (PID 82727), backed up positions JSON
+- Switched `wallet_monitor.py` import to `polymarket_v2`, ran 5 iterations dry-run against `clob-v2.polymarket.com`
+- V2 wrapper initialized cleanly, `ensure_sell_approval()` verified all exchanges approved, API key derived, Data API polled both tracked wallets, Telegram alert sent
+- Zero signals during test window → no JSON writes occurred (verified)
+- Reverted import, restored positions JSON from backup (identical to baseline), restarted V1 wallet monitor (new PID 42994)
+- V1 wallet monitor back to LIVE mode with all 5 tracked positions intact
+- Conclusion: the wallet stalker is functionally ready for V2. Same one-line import swap as crypto latency on cutover day.
+
 ## Strategy Research
 
 Prefer backtests, paper/dry-run mode, or small test orders. Avoid advising large live risk without explicit request. Reference `agents/application/backtest.py` for the backtest harness and `docs/STRATEGY_RESEARCH.md` for research notes.
