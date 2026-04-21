@@ -297,6 +297,17 @@ The wallet stalker can now successfully execute exit trades when scottilicious o
 - Wallet state at completion: 245.90 USDC.e, 10 pUSD, all V2 approvals set
 - Remaining USDC.e (~245) can be wrapped closer to April 28 once V2 bot code is tested
 
+### Crypto Latency Bot V2 End-to-End Test — PASSED (2026-04-21)
+
+- Temporarily switched `crypto_latency_bot.py` import to `polymarket_v2`, ran 30 iterations in dry-run mode
+- V2 wrapper instantiated cleanly from inside the bot
+- API key derivation succeeded against `clob-v2.polymarket.com`
+- Binance WebSocket + Polymarket book WebSocket both connected (confirms V2 WebSocket URL unchanged from V1)
+- `get_usdc_balance()` correctly returned 10.00 pUSD (the amount we wrapped earlier)
+- 96 tokens subscribed, 48 Gamma markets cached
+- Clean termination, zero errors, zero warnings
+- Conclusion: the crypto latency bot is functionally ready for V2. On cutover day, the one-line import change is all that's needed (plus production host swap if required).
+
 ## Strategy Research
 
 Prefer backtests, paper/dry-run mode, or small test orders. Avoid advising large live risk without explicit request. Reference `agents/application/backtest.py` for the backtest harness and `docs/STRATEGY_RESEARCH.md` for research notes.
