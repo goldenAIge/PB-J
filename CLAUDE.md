@@ -319,6 +319,25 @@ The wallet stalker can now successfully execute exit trades when scottilicious o
 - V1 wallet monitor back to LIVE mode with all 5 tracked positions intact
 - Conclusion: the wallet stalker is functionally ready for V2. Same one-line import swap as crypto latency on cutover day.
 
+### Directional Scanner V2 Validation — PASSED (2026-04-21)
+
+- Lightweight validation approach chosen (vs full E2E) because:
+  - Scanner's only Polymarket touchpoint is `execute_limit_buy()` — one method
+  - That method is already end-to-end tested via Layer 2 wrapper tests (9/9 pass)
+  - Full E2E test would cost ~$0.50 in Anthropic API calls (Haiku+Sonnet pipeline) without adding meaningful confidence
+- Smoke test verified: import chain resolves to `polymarket_v2`, `ClaudeForecaster` instantiates cleanly with V2 wrapper
+- Zero API calls, zero cost
+- Import reverted to V1; cron continues normally
+- Conclusion: directional scanner is ready for V2 migration. One-line import swap needed in `agents/application/claude_forecaster.py` line 25 on cutover day.
+
+### V2 Migration Status Summary (as of 2026-04-21)
+
+All three bots validated against V2 infrastructure. On-chain prep complete. Remaining work:
+- Migrate production by flipping three import lines on cutover day (April 28, ~11:00 UTC)
+- Wrap remaining USDC.e → pUSD closer to cutover (currently have 10 pUSD, need enough for typical daily trading)
+- Stop V1 cron job, start V2 cron job
+- Monitor first live trades on V2 carefully
+
 ## Strategy Research
 
 Prefer backtests, paper/dry-run mode, or small test orders. Avoid advising large live risk without explicit request. Reference `agents/application/backtest.py` for the backtest harness and `docs/STRATEGY_RESEARCH.md` for research notes.
