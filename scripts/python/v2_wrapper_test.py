@@ -109,10 +109,72 @@ def test_nonexistent_order():
         raise
 
 
+# --- Layer 2 write tests ---
+
+live_order_id = None  # set by test_place_order, used by 7/8/9
+
+
+def test_place_order():
+    """Test 6: place unfillable limit buy ($0.01 bid on a $0.99 ask market)."""
+    global live_order_id
+    resp = poly.execute_limit_buy(TEST_TOKEN_ID, price=0.01, size=5)
+    print(f"  Response: {resp}")
+    assert isinstance(resp, dict), f"Expected dict, got {type(resp)}"
+    order_id = resp.get("orderID") or resp.get("id")
+    assert order_id, f"No orderID in response: {resp}"
+    live_order_id = order_id
+    print(f"  Order ID: {live_order_id}")
+    print(f"\n  {'='*55}")
+    print(f"  ORDER PLACED: {live_order_id}")
+    print(f"  You can manually cancel at any time via:")
+    print(f'    cd ~/Documents/PB\\&J && PYTHONPATH="." venv/bin/python3 -c \\')
+    print(f"      \"from agents.polymarket.polymarket_v2 import Polymarket; \\")
+    print(f"       Polymarket().cancel_order('{live_order_id}')\"")
+    print(f"  {'='*55}")
+    return resp
+
+
+def test_verify_live():
+    """Test 7: verify order is live on the book."""
+    import time
+    # V2 CLOB has eventual consistency — GET endpoint needs ~1s to index a newly placed order
+    time.sleep(1)
+    assert live_order_id, "No order ID from test 6"
+    resp = poly.get_order(live_order_id)
+    print(f"  Response: {resp}")
+    assert resp is not None, "get_order returned None"
+    return resp
+
+
+def test_cancel():
+    """Test 8: cancel the order."""
+    assert live_order_id, "No order ID from test 6"
+    resp = poly.cancel_order(live_order_id)
+    print(f"  Response: {resp}")
+    assert resp is not None, "cancel_order returned None"
+    return resp
+
+
+def test_verify_cancelled():
+    """Test 9: verify order is no longer live."""
+    assert live_order_id, "No order ID from test 6"
+    resp = poly.get_order(live_order_id)
+    print(f"  Response: {resp}")
+    # Cancelled orders may return None, empty, or a dict with cancelled status
+    if resp is None:
+        print("  Order gone (None) — cancel confirmed")
+        return True
+    if isinstance(resp, dict):
+        status = str(resp.get("status", resp.get("order_status", ""))).lower()
+        print(f"  Status: {status}")
+        assert "live" not in status, f"Order still LIVE after cancel: {resp}"
+    return resp
+
+
 # --- Run all ---
 
 if __name__ == "__main__":
-    tests = [
+    read_tests = [
         ("1) Init + API keys", test_init),
         ("2) get_best_ask", test_best_ask),
         ("3) get_orderbook", test_orderbook),
@@ -120,15 +182,50 @@ if __name__ == "__main__":
         ("5) get_order (nonexistent)", test_nonexistent_order),
     ]
 
+    write_tests = [
+        ("6) Place unfillable limit buy", test_place_order),
+        ("7) Verify order is live", test_verify_live),
+        ("8) Cancel order", test_cancel),
+        ("9) Verify cancellation", test_verify_cancelled),
+    ]
+
     results = []
-    for name, fn in tests:
-        results.append(run_test(name, fn))
+    for name, fn in read_tests:
+        results.append((name, run_test(name, fn)))
+
+    # Write tests: 7/8/9 depend on 6 succeeding
+    t6_result = run_test(*write_tests[0])
+    results.append((write_tests[0][0], t6_result))
+
+    if t6_result:
+        for name, fn in write_tests[1:]:
+            results.append((name, run_test(name, fn)))
+        # Safety check: if cancel failed (test 8), warn loudly
+        cancel_ok = results[-2][1]  # test 8 result
+        if not cancel_ok and live_order_id:
+            print(f"\n{'!'*60}")
+            print(f"  WARNING: ORDER {live_order_id} MAY STILL BE LIVE")
+            print(f"  Cancel it manually at polymarket.com or re-run cancel_order()")
+            print(f"{'!'*60}")
+    else:
+        for name, _ in write_tests[1:]:
+            print(f"\n{'='*60}")
+            print(f"TEST: {name}")
+            print(f"{'='*60}")
+            print(f"SKIPPED: {name} (depends on test 6)")
+            results.append((name, None))
 
     print(f"\n{'='*60}")
-    passed = sum(results)
-    print(f"RESULTS: {passed}/{len(results)} passed")
-    if passed < len(results):
-        for (name, _), ok in zip(tests, results):
-            if not ok:
-                print(f"  FAILED: {name}")
-    print(f"{'='*60}")
+    passed = sum(1 for _, ok in results if ok is True)
+    skipped = sum(1 for _, ok in results if ok is None)
+    failed = sum(1 for _, ok in results if ok is False)
+    total = len(results)
+    print(f"RESULTS: {passed}/{total} passed", end="")
+    if skipped:
+        print(f", {skipped} skipped", end="")
+    if failed:
+        print(f", {failed} failed", end="")
+        for name, ok in results:
+            if ok is False:
+                print(f"\n  FAILED: {name}", end="")
+    print(f"\n{'='*60}")

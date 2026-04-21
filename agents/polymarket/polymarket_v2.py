@@ -30,6 +30,9 @@ except ImportError:
 from py_clob_client_v2 import (
     ClobClient,
     ApiCreds,
+    OrderArgs,
+    OrderType,
+    OrderPayload,
     BalanceAllowanceParams,
     AssetType,
 )
@@ -172,3 +175,79 @@ class Polymarket:
             asset_type=AssetType.COLLATERAL if asset_type == "COLLATERAL" else AssetType.CONDITIONAL,
         )
         return self.client.get_balance_allowance(params)
+
+    # --- Write operations (Layer 2) ---
+
+    def execute_limit_buy(self, token_id: str, price: float, size: float) -> dict:
+        """Execute a GTC limit buy order (maker order = zero fees).
+
+        Args:
+            token_id: The token ID to buy
+            price: Limit price (0 < price < 1)
+            size: Number of shares to buy (must be positive)
+
+        Returns:
+            Order response dict with 'orderID' on success.
+        """
+        if not (0 < price < 1):
+            raise ValueError(f"Invalid price {price} — must be between 0 and 1 exclusive")
+        if size <= 0:
+            raise ValueError(f"Invalid size {size} — must be positive")
+
+        order_args = OrderArgs(
+            token_id=token_id,
+            price=price,
+            size=size,
+            side="BUY",
+        )
+        resp = self.client.create_and_post_order(
+            order_args=order_args,
+            order_type=OrderType.GTC,
+        )
+        return resp
+
+    def execute_limit_sell(self, token_id: str, price: float, size: float) -> dict:
+        """Execute a GTC limit sell order (maker order = zero fees).
+
+        Args:
+            token_id: The token ID to sell
+            price: Limit price (0 < price < 1)
+            size: Number of shares to sell (must be positive)
+
+        Returns:
+            Order response dict with 'orderID' on success.
+        """
+        if not (0 < price < 1):
+            raise ValueError(f"Invalid price {price} — must be between 0 and 1 exclusive")
+        if size <= 0:
+            raise ValueError(f"Invalid size {size} — must be positive")
+
+        order_args = OrderArgs(
+            token_id=token_id,
+            price=price,
+            size=size,
+            side="SELL",
+        )
+        resp = self.client.create_and_post_order(
+            order_args=order_args,
+            order_type=OrderType.GTC,
+        )
+        return resp
+
+    def cancel_order(self, order_id: str) -> dict:
+        """Cancel an open order by order ID.
+
+        V2 API change: cancel_order takes OrderPayload(orderID=...) instead
+        of a bare string. This wrapper preserves the V1 caller interface.
+
+        Returns:
+            Response dict on success. Logs warning for already-filled/cancelled orders.
+        """
+        try:
+            return self.client.cancel_order(OrderPayload(orderID=order_id))
+        except Exception as e:
+            err = str(e).lower()
+            if "already" in err or "filled" in err or "cancelled" in err or "not found" in err:
+                logger.warning(f"Cancel order {order_id[:16]}...: {e}")
+                return {}
+            raise

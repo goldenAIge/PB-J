@@ -286,6 +286,7 @@ The wallet stalker can now successfully execute exit trades when scottilicious o
 - Test market (US/Iran nuclear deal 2027, token_id `10293...7216`) has `tick_size=0.01`
 - V2 collateral balance is `0` until USDC is wrapped to pUSD via `CollateralOnramp.wrap()`
 - V2 allowances map shows three exchange contracts: `exchange_v2` (`0xE111...996B`), `neg_risk_adapter` (`0xd91E...1296`), `neg_risk_exchange_v2` (`0xe222...0F59`)
+- V2 CLOB has eventual consistency between POST /order and GET /order — expect ~1s lag before a newly placed order appears via `get_order()`. Crypto latency bot's existing polling loop handles this naturally; do not optimize out the retry logic. This is a real V2 behavior, not a bug.
 
 ### 2026-04-21: On-chain V2 Prep Complete
 
