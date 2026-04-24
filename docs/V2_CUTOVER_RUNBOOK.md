@@ -58,6 +58,12 @@ grep "from agents.polymarket.polymarket import Polymarket" \
   agents/application/claude_forecaster.py
 # Expected: all three files show V1 import
 
+# Verify main branch is at expected state
+git fetch origin
+git log --oneline main -1
+# Expected: the last commit on main before v2-migration work started
+# If main has unexpected commits, investigate before proceeding
+
 # Check Polymarket official channels
 # - https://status.polymarket.com
 # - https://x.com/PolymarketDevs
@@ -94,22 +100,25 @@ This tells `polymarket_v2.py` to use the production V2 endpoint instead of the p
 
 ### Step 3: Update source imports
 
+Open each file in your editor and change this one line:
+
+```
+FROM: from agents.polymarket.polymarket import Polymarket
+TO:   from agents.polymarket.polymarket_v2 import Polymarket
+```
+
+Files to edit:
+- `agents/application/crypto_latency_bot.py` (around line 40)
+- `agents/application/wallet_monitor.py` (around line 32)
+
+**DO NOT edit `agents/application/claude_forecaster.py` — scanner stays offline.**
+
 ```bash
-cd ~/Documents/PB\&J
-
-# Crypto latency bot
-sed -i '' 's/from agents.polymarket.polymarket import Polymarket/from agents.polymarket.polymarket_v2 import Polymarket/' \
-  agents/application/crypto_latency_bot.py
-
-# Wallet stalker
-sed -i '' 's/from agents.polymarket.polymarket import Polymarket/from agents.polymarket.polymarket_v2 import Polymarket/' \
-  agents/application/wallet_monitor.py
-
 # Verify the changes
-grep "polymarket_v2" agents/application/crypto_latency_bot.py agents/application/wallet_monitor.py
+grep 'from agents.polymarket.polymarket_v2 import Polymarket' \
+  agents/application/crypto_latency_bot.py \
+  agents/application/wallet_monitor.py
 # Expected: both files show polymarket_v2
-
-# DO NOT change claude_forecaster.py — scanner stays offline
 
 # Commit
 git add agents/application/crypto_latency_bot.py agents/application/wallet_monitor.py
@@ -120,7 +129,9 @@ git commit -m "Cutover: switch crypto_latency and wallet_monitor to V2 wrapper"
 
 ```bash
 git checkout main
-git merge v2-migration
+git merge --ff-only v2-migration
+# If this fails (can't fast-forward), STOP and investigate.
+# There should be no commits on main that aren't in v2-migration.
 git push origin main
 ```
 
@@ -149,6 +160,10 @@ PYTHONPATH="." venv/bin/python3 scripts/python/cli.py run-crypto-latency \
 # - Balance shows pUSD amount (~247)
 # - Clean termination after 30 iterations
 # - Zero errors
+
+# NOTE: The foreground test above uses --dry-run. The production start
+# command below uses --no-dry-run. Switching to production mode is what
+# activates real trading.
 
 # If clean, start in production mode (backgrounded):
 cd ~/Documents/PB\&J
@@ -188,25 +203,30 @@ tail -10 wallet_monitor_trades.log
 ## 3. Post-Cutover Monitoring (first 2 hours)
 
 ```bash
-# Watch crypto latency bot logs
+# Watch both logs in parallel (two terminal tabs)
 tail -f crypto_latency_live.log
-
-# Watch wallet stalker logs
 tail -f wallet_monitor_trades.log
 ```
 
-**What to watch for:**
+### Monitoring Checklist
+
+```
+☐ 5 min post-start:  Both bots still running (ps aux check)
+☐ 15 min post-start: No error stack traces in either log file
+☐ 30 min post-start: Telegram startup alerts received for both bots
+☐ 1 hour post-start: Crypto latency bot has scanned at least 100 times
+                      (check log for iteration count or status prints)
+☐ 1 hour post-start: Wallet stalker has polled whale activity at least 60 times
+                      (check log for [Iter N] lines)
+☐ First trade:       tx hash captured, Polygonscan verified, Telegram alert received
+☐ 2 hours post-start: No unexpected crashes or restarts
+```
+
+### What to watch for in logs
 - Any `PolyApiException` errors (V2 API rejections)
 - Any `web3` errors (on-chain interaction failures)
 - `ensure_sell_approval()` should only fire once per session
-- Telegram alerts should arrive for any trades
 - Balance reads should show pUSD (not USDC.e)
-
-**First V2 trade validation:**
-When the first live trade happens (crypto latency signal or wallet stalker copy):
-- Check the order response includes `orderID` and `status: 'live'` or `status: 'matched'`
-- Verify on Polygonscan that the transaction settled correctly
-- Confirm Telegram alert fires
 
 ---
 
