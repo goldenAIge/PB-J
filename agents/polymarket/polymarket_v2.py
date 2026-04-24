@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 # --- Constants ---
 
-V2_HOST = "https://clob-v2.polymarket.com"
+V2_HOST = os.getenv("CLOB_HOST", "https://clob-v2.polymarket.com")
 CHAIN_ID = 137
 
 # pUSD is the V2 collateral token (replaces USDC.e from V1)
