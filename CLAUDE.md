@@ -338,6 +338,16 @@ All three bots validated against V2 infrastructure. On-chain prep complete. Rema
 - Stop V1 cron job, start V2 cron job
 - Monitor first live trades on V2 carefully
 
+### 2026-04-24: All Bots Stopped for Clean Cutover
+
+- Directional scanner cron removed (scanner had correctness bug — DeepSeek V4 trade placed betting NO after V4 was already publicly released)
+- Crypto latency bot stopped (PID 21106, 16 days uptime, 0 recent trades — safe to stop)
+- Wallet stalker stopped (PID 42994, held 6 tracked positions — will resolve naturally during 4-day pause)
+- Open positions: 8 positions, cost $125.11, current value $82.76, unrealized P/L -$42.35 (snapshot as of stop time)
+- Scanner P/L visible on open trades: approx -$30 net. Combined with DeepSeek V4 correctness bug, scanner needs debugging before restart
+- Plan: execute V2 migration April 28 ~11:00 UTC, selectively restart bots post-migration
+- Scanner restart is contingent on debugging the research pipeline — not automatic
+
 ## Strategy Research
 
 Prefer backtests, paper/dry-run mode, or small test orders. Avoid advising large live risk without explicit request. Reference `agents/application/backtest.py` for the backtest harness and `docs/STRATEGY_RESEARCH.md` for research notes.
