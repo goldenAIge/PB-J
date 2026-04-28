@@ -29,7 +29,7 @@ import requests
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
-from agents.polymarket.polymarket import Polymarket
+from agents.polymarket.polymarket_v2 import Polymarket
 from agents.application.risk_manager import RiskConfig, PortfolioRiskManager
 from agents.connectors.telegram_alerts import TelegramAlerter
 

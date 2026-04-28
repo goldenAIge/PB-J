@@ -22,7 +22,7 @@ load_dotenv(Path(".env"))
 from agents.connectors.anthropic_client import AnthropicClient
 from agents.application.market_prefilter import MarketPrefilter
 from agents.polymarket.gamma import GammaMarketClient
-from agents.polymarket.polymarket import Polymarket
+from agents.polymarket.polymarket_v2 import Polymarket
 
 logger = logging.getLogger(__name__)
 

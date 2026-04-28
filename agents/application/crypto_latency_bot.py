@@ -37,7 +37,7 @@ import websockets
 # Build SSL context using certifi's CA bundle (macOS Python often lacks system certs)
 _ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-from agents.polymarket.polymarket import Polymarket
+from agents.polymarket.polymarket_v2 import Polymarket
 from agents.polymarket.gamma import GammaMarketClient
 from agents.application.risk_manager import RiskConfig, PortfolioRiskManager
 from agents.connectors.telegram_alerts import TelegramAlerter
