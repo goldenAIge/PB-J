@@ -348,6 +348,16 @@ All three bots validated against V2 infrastructure. On-chain prep complete. Rema
 - Plan: execute V2 migration April 28 ~11:00 UTC, selectively restart bots post-migration
 - Scanner restart is contingent on debugging the research pipeline — not automatic
 
+### 2026-04-28: Cutover Executed
+
+- V2 production tested 11/11 against `clob.polymarket.com` (order place, verify, cancel — full lifecycle)
+- All three bot files updated to V2 wrapper imports (commit `4edd575`)
+- Merged `v2-migration` to `main` via fast-forward, pushed to origin
+- Crypto latency bot ran cleanly on V2 in 30-iteration dry-run: balance $247.63 pUSD, 96 tokens subscribed, all WebSockets connected, zero errors
+- Bots NOT started in production yet — pausing to evaluate strategy parameters before going live
+- Decision: walk through each bot's strategy and parameters one at a time before restart
+- Wallet state at end of day: $247.63 pUSD, $0 USDC.e, ~51 MATIC, all V2 approvals active
+
 ## Strategy Research
 
 Prefer backtests, paper/dry-run mode, or small test orders. Avoid advising large live risk without explicit request. Reference `agents/application/backtest.py` for the backtest harness and `docs/STRATEGY_RESEARCH.md` for research notes.
